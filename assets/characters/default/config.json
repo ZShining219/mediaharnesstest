@@ -1,0 +1,6 @@
+{
+  "voice_id": "",
+  "default_prompt": "一位主播自然地对着镜头说话，表情生动，光线柔和，画质清晰",
+  "look": "looks/default.png",
+  "notes": "voice_id: MiniMax voice_clone 克隆得到的声音ID或系统音色ID; look: 当前形象图相对本目录的路径"
+}

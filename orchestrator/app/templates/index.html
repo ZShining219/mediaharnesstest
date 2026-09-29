@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AI 传媒工作流</title>
+<style>
+  :root { --bg:#0f1115; --card:#1a1d24; --line:#2a2e39; --fg:#e6e8ee; --dim:#8a8f9e;
+          --acc:#4f7cff; --ok:#2ea36c; --bad:#d9534f; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg);
+         font:14px/1.6 -apple-system,"PingFang SC",sans-serif; }
+  header { padding:14px 24px; border-bottom:1px solid var(--line);
+           display:flex; align-items:center; gap:16px; }
+  header h1 { font-size:17px; margin:0; }
+  nav button { background:none; border:none; color:var(--dim); padding:8px 14px;
+               cursor:pointer; font-size:14px; border-bottom:2px solid transparent; }
+  nav button.on { color:var(--fg); border-color:var(--acc); }
+  main { padding:20px 24px; max-width:1100px; margin:0 auto; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px;
+          padding:16px; margin-bottom:16px; }
+  .pill { display:inline-block; padding:2px 10px; border-radius:20px; font-size:12px;
+          background:#262b36; margin-right:8px; }
+  .pill.ok { color:var(--ok); } .pill.bad { color:var(--bad); }
+  video,img.preview { width:260px; border-radius:8px; display:block; background:#000; }
+  .item { display:flex; gap:16px; }
+  .item .meta { flex:1; }
+  input,textarea,select { width:100%; background:#12151b; color:var(--fg);
+      border:1px solid var(--line); border-radius:6px; padding:7px 10px; margin:4px 0; }
+  textarea { min-height:70px; }
+  .btn { background:var(--acc); color:#fff; border:none; padding:8px 18px;
+         border-radius:6px; cursor:pointer; margin-right:8px; }
+  .btn.gray { background:#333a47; } .btn.red { background:var(--bad); }
+  .btn.green { background:var(--ok); }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  td,th { text-align:left; padding:6px 10px; border-bottom:1px solid var(--line); }
+  .dim { color:var(--dim); }
+  .row { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  h3 { margin:4px 0 12px; font-size:15px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🎬 AI 传媒工作流</h1>
+  <nav>
+    <button class="on" data-tab="review">审核队列 <span id="cnt"></span></button>
+    <button data-tab="new">提交任务</button>
+    <button data-tab="jobs">任务记录</button>
+    <button data-tab="approved">待发布</button>
+    <button data-tab="status">服务状态</button>
+  </nav>
+</header>
+<main>
+<section id="review"></section>
+<section id="new" style="display:none">
+  <div class="card"><h3>数字人口播</h3>
+    <div class="row">
+      <div><label class="dim">角色</label><input id="dh-char" value="default"></div>
+      <div><label class="dim">情绪</label>
+        <select id="dh-emo"><option value="">neutral</option>
+          <option>happy</option><option>sad</option><option>angry</option>
+          <option>surprise</option><option>fear</option><option>disgust</option></select></div>
+    </div>
+    <label class="dim">口播文案</label><textarea id="dh-text"></textarea>
+    <label class="dim">标题 / 标签(逗号分隔)</label>
+    <div class="row"><input id="dh-title"><input id="dh-tags"></div>
+    <button class="btn" onclick="submitDH()">生成</button>
+  </div>
+  <div class="card"><h3>对标视频转换 (换脸/换衣/换背景)</h3>
+    <label class="dim">源视频路径</label><input id="vt-src" placeholder="assets/xxx.mp4">
+    <div class="row">
+      <div><label class="dim">人脸参考</label><input id="vt-face"></div>
+      <div><label class="dim">服装参考</label><input id="vt-cloth"></div>
+    </div>
+    <label class="dim">提示词</label><input id="vt-prompt" placeholder="一位年轻女性在城市街道跳舞...">
+    <button class="btn" onclick="submitVT()">提交</button>
+  </div>
+  <div class="card"><h3>自动化创作 (MoneyPrinterTurbo)</h3>
+    <label class="dim">主题</label><input id="ac-subject" placeholder="AI 工具使用教程: ...">
+    <label class="dim">自定义文案(可空, 空则 AI 写稿)</label><textarea id="ac-script"></textarea>
+    <button class="btn" onclick="submitAC()">生成</button>
+  </div>
+</section>
+<section id="jobs" style="display:none"><div class="card"><table id="jobtab">
+  <tr><th>任务</th><th>类型</th><th>状态</th><th>时间</th></tr></table></div></section>
+<section id="approved" style="display:none"></section>
+<section id="status" style="display:none"><div class="card" id="statusbox"></div></section>
+</main>
+<script>
+const $ = s => document.querySelector(s);
+const api = (p, m='GET', body) => fetch(p, {method:m,
+  headers:{'Content-Type':'application/json'}, body:body?JSON.stringify(body):null})
+  .then(r=>r.json());
+
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('nav button').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on');
+  document.querySelectorAll('main section').forEach(s=>s.style.display='none');
+  $('#'+b.dataset.tab).style.display='block';
+  load(b.dataset.tab);
+});
+
+function itemCard(it, inApproved){
+  const media = it.is_video
+    ? `<video src="/media/${it.id}" controls></video>`
+    : `<img class="preview" src="/media/${it.id}">`;
+  return `<div class="card item">${media}<div class="meta">
+    <div><b>${it.title||it.id}</b> <span class="pill">${it.pipeline||''}</span>
+         <span class="dim">${new Date((it.created_at||0)*1000).toLocaleString()}</span></div>
+    <div class="row">
+      <input id="t-${it.id}" value="${it.title||''}" placeholder="发布标题">
+      <input id="g-${it.id}" value="${(it.tags||[]).join(',')}" placeholder="标签,逗号分隔">
+    </div>
+    <input id="d-${it.id}" value="${it.desc||''}" placeholder="作品简介">
+    <input id="s-${it.id}" placeholder="定时发布 YYYY-MM-DD HH:MM (可空=立即)">
+    <button class="btn green" onclick="approve('${it.id}',${inApproved})">
+      ${inApproved?'发布':'通过'}</button>
+    ${inApproved?'':`<button class="btn red" onclick="reject('${it.id}')">打回</button>`}
+    <span class="dim" id="msg-${it.id}"></span>
+  </div></div>`;
+}
+
+async function approve(id, inApproved){
+  const body = {title:$(`#t-${id}`).value, desc:$(`#d-${id}`).value,
+    tags:$(`#g-${id}`).value.split(',').filter(Boolean),
+    schedule:$(`#s-${id}`).value||null, publish_now:false};
+  const ep = inApproved?`/api/approved/${id}/publish`:`/api/review/${id}/approve`;
+  const r = await api(ep,'POST',body);
+  $(`#msg-${id}`).textContent = r.published?'已发布 ✓':(r.error||'已移入待发布');
+  setTimeout(()=>load(inApproved?'approved':'review'), 800);
+}
+async function reject(id){ await api(`/api/review/${id}/reject`,'POST',{}); load('review'); }
+
+async function submitDH(){
+  const r = await api('/api/jobs/digital-human','POST',
+    {text:$('#dh-text').value, character:$('#dh-char').value,
+     emotion:$('#dh-emo').value||null, title:$('#dh-title').value||null,
+     tags:$('#dh-tags').value.split(',').filter(Boolean)});
+  alert(r.queued?'已提交, 生成需要数分钟, 稍后到"审核队列"查看':'提交失败');
+}
+async function submitVT(){
+  const r = await api('/api/jobs/video-transform','POST',
+    {source:$('#vt-src').value, prompt:$('#vt-prompt').value,
+     face:$('#vt-face').value||null, cloth:$('#vt-cloth').value||null});
+  alert(r.queued?'已提交':'提交失败');
+}
+async function submitAC(){
+  const r = await api('/api/jobs/auto-content','POST',
+    {subject:$('#ac-subject').value, script:$('#ac-script').value});
+  alert(r.queued?'已提交':'提交失败');
+}
+
+async function load(tab){
+  if(tab==='review'){
+    const items = await api('/api/review');
+    $('#cnt').textContent = items.length?`(${items.length})`:'';
+    $('#review').innerHTML = items.length
+      ? items.map(i=>itemCard(i,false)).join('')
+      : '<div class="card dim">暂无待审核作品 — 到"提交任务"页生成</div>';
+  }
+  if(tab==='approved'){
+    const items = await api('/api/approved');
+    $('#approved').innerHTML = items.length
+      ? items.map(i=>itemCard(i,true)).join('')
+      : '<div class="card dim">暂无待发布作品</div>';
+  }
+  if(tab==='jobs'){
+    const jobs = await api('/api/jobs');
+    $('#jobtab').innerHTML = '<tr><th>任务</th><th>类型</th><th>状态</th><th>时间</th></tr>'
+      + jobs.map(j=>`<tr><td>${j.id}</td><td>${j.type}</td>
+        <td><span class="pill ${j.status==='done'?'ok':(j.status==='error'?'bad':'')}">${j.status}</span></td>
+        <td class="dim">${new Date(j.created_at*1000).toLocaleString()}</td></tr>`).join('');
+  }
+  if(tab==='status'){
+    const h = await api('/api/health');
+    $('#statusbox').innerHTML = '<h3>服务状态</h3>' + Object.entries(h).map(([k,v])=>
+      `<div><span class="pill ${v.ok||v.configured||v.installed?'ok':'bad'}">${v.ok||v.configured||v.installed?'正常':'未就绪'}</span>
+       ${k} <span class="dim">${v.url||''}</span></div>`).join('')
+      + '<p class="dim">ComfyUI(视频/数字人推理) · MiniMax(API额度) · MPT(自动创作) · sau(发布)</p>';
+  }
+}
+load('review');
+setInterval(()=>{const on=document.querySelector('nav button.on'); if(on) load(on.dataset.tab);}, 15000);
+</script>
+</body>
+</html>

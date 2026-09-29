@@ -1,0 +1,41 @@
+# ---- secrets & local config ----
+.env
+config.yaml
+!.env.example
+!config.example.yaml
+
+# ---- python ----
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+
+# ---- vendored open-source services (clone via scripts/setup.sh) ----
+services/
+
+# ---- runtime data ----
+outputs/review/*
+outputs/approved/*
+outputs/published/*
+outputs/failed/*
+outputs/tmp/
+!outputs/**/.gitkeep
+data/
+*.db
+*.db-journal
+
+# ---- assets: keep personal photos/voice samples out of git ----
+assets/characters/*/refs/
+assets/voices/
+assets/garments/
+!assets/**/.gitkeep
+
+# ---- comfyui runtime ----
+services/ComfyUI/input/
+services/ComfyUI/output/
+services/ComfyUI/models/
+services/ComfyUI/user/
+
+# ---- misc ----
+.DS_Store
+logs/
