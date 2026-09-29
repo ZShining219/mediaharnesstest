@@ -9,7 +9,6 @@ services:
     environment:
       # 容器内 sau 使用镜像内安装版本
       SAU_BIN: /usr/local/bin/sau
-      ORCH_TOKEN: ${ORCH_TOKEN:-}
     volumes:
       - ./outputs:/app/outputs        # 作品产物(审核/发布)
       - ./assets:/app/assets          # 角色/素材
