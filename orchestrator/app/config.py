@@ -49,6 +49,8 @@ COMFYUI_AUTH = env("COMFYUI_AUTH")  # "user:pass" 或 token
 
 MPT_BASE_URL = env("MPT_BASE_URL", "http://127.0.0.1:8080").rstrip("/")
 
+WAVESPEED_API_KEY = env("WAVESPEED_API_KEY")
+
 SAU_BIN = env("SAU_BIN") or str(ROOT / "services" / "social-auto-upload" / ".venv" / "bin" / "sau")
 SAU_ACCOUNT = env("SAU_ACCOUNT", "main")
 

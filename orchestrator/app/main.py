@@ -1,8 +1,11 @@
-"""编排器 FastAPI 服务: 仪表盘 / 审核 / 任务提交 / 发布"""
+"""编排器 FastAPI 服务: 仪表盘 / 审核 / 任务提交 / 发布 / 素材管理"""
+import json
+import shutil
 import time
+import uuid
 from pathlib import Path
 
-from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException
+from fastapi import BackgroundTasks, Depends, FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from pydantic import BaseModel
 
@@ -11,9 +14,17 @@ from . import comfyui, config as C, mpt, publisher, scheduler, store
 app = FastAPI(title="AI 传媒工作流编排器")
 
 
-def auth(token: str = ""):
-    if C.ORCH_TOKEN and token != C.ORCH_TOKEN:
-        raise HTTPException(401, "bad token")
+@app.middleware("http")
+async def token_guard(request, call_next):
+    """ORCH_TOKEN 设置后: /api 与 /media 需带 token (?token= 或 X-Token 头)"""
+    if C.ORCH_TOKEN and (request.url.path.startswith("/api")
+                         or request.url.path.startswith("/media")):
+        tok = (request.query_params.get("token")
+               or request.headers.get("x-token")
+               or request.cookies.get("orch_token"))
+        if tok != C.ORCH_TOKEN:
+            return JSONResponse({"detail": "unauthorized"}, status_code=401)
+    return await call_next(request)
 
 
 @app.on_event("startup")
@@ -40,13 +51,140 @@ def media_file(item_id: str):
     raise HTTPException(404)
 
 
+# ---------------- 素材/角色管理 ----------------
+
+ASSET_KINDS = {
+    "source": C.ASSETS / "sources",      # 对标视频
+    "garment": C.ASSETS / "garments",    # 服装参考
+    "voice": C.ASSETS / "voices",        # 声音样本
+    "image": C.ASSETS / "images",        # 通用参考图
+    "bgm": C.ASSETS / "bgm",
+}
+UPLOAD_TMP = C.OUTPUTS / "tmp" / "uploads"
+
+
+@app.post("/api/upload")
+async def upload(file: UploadFile = File(...), kind: str = "source",
+                 character: str | None = None):
+    """浏览器上传素材。kind=source/garment/voice/image/bgm, 或 character+look 形象"""
+    if kind == "look":
+        if not character:
+            raise HTTPException(400, "kind=look 需要 character 参数")
+        d = C.ASSETS / "characters" / character / "looks"
+    else:
+        d = ASSET_KINDS.get(kind)
+        if not d:
+            raise HTTPException(400, f"未知 kind: {kind}")
+    d.mkdir(parents=True, exist_ok=True)
+    safe_name = f"{int(time.time())}_{Path(file.filename or 'file').name.replace('..', '_')}"
+    dst = d / safe_name
+    with open(dst, "wb") as f:
+        shutil.copyfileobj(file.file, f)
+    rel = dst.relative_to(C.ROOT)
+    return {"path": str(rel), "name": safe_name}
+
+
+@app.get("/api/assets")
+def list_assets():
+    out = {}
+    for kind, d in ASSET_KINDS.items():
+        d.mkdir(parents=True, exist_ok=True)
+        out[kind] = [str(f.relative_to(C.ROOT)) for f in sorted(d.iterdir()) if f.is_file()]
+    out["characters"] = [p.name for p in (C.ASSETS / "characters").iterdir() if p.is_dir()]
+    return out
+
+
+@app.get("/api/assets/file")
+def asset_file(path: str):
+    p = (C.ROOT / path).resolve()
+    if not str(p).startswith(str(C.ASSETS.resolve())) or not p.is_file():
+        raise HTTPException(403)
+    return FileResponse(p)
+
+
+@app.get("/api/characters")
+def list_characters():
+    from pipelines.digital_human.pipeline import character_dir, load_character
+    res = []
+    chars = C.ASSETS / "characters"
+    for d in sorted(chars.iterdir()):
+        if not d.is_dir():
+            continue
+        cfg = load_character(d.name)
+        look = character_dir(d.name) / cfg.get("look", "looks/default.png")
+        looks = [f.name for f in (d / "looks").iterdir() if f.is_file()] \
+            if (d / "looks").exists() else []
+        res.append({"name": d.name, "voice_id": cfg.get("voice_id", ""),
+                    "look": cfg.get("look"), "looks": looks,
+                    "has_look": look.exists()})
+    return res
+
+
+class CharCfgReq(BaseModel):
+    voice_id: str | None = None
+    default_prompt: str | None = None
+    look: str | None = None
+
+
+@app.post("/api/characters/{name}/config")
+def set_character(name: str, req: CharCfgReq):
+    d = C.ASSETS / "characters" / name
+    (d / "looks").mkdir(parents=True, exist_ok=True)
+    cfg = {}
+    cfg_file = d / "config.json"
+    if cfg_file.exists():
+        cfg = json.loads(cfg_file.read_text(encoding="utf-8"))
+    for k in ("voice_id", "default_prompt", "look"):
+        v = getattr(req, k)
+        if v is not None:
+            cfg[k] = v
+    cfg_file.write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8")
+    return cfg
+
+
+class VoiceCloneReq(BaseModel):
+    voice_path: str          # assets/voices/xxx.wav 相对路径
+    voice_id: str            # 自定义音色ID
+    character: str = "default"
+
+
+@app.post("/api/voice/clone")
+def voice_clone(req: VoiceCloneReq):
+    """上传的声音样本 -> MiniMax 克隆 -> 写入角色 voice_id"""
+    from . import minimax
+    p = C.ROOT / req.voice_path
+    if not p.exists():
+        raise HTTPException(404, f"声音文件不存在: {req.voice_path}")
+    vid = minimax.Minimax().clone_voice(p, req.voice_id)
+    if req.character:
+        set_character(req.character, CharCfgReq(voice_id=vid))
+    return {"voice_id": vid}
+
+
+@app.post("/api/characters/{name}/edit-look")
+def edit_look(name: str, req: dict):
+    """形象编辑: 换装/换发型 (WaveSpeed Qwen-Image-Edit)"""
+    from . import wavespeed
+    from pipelines.digital_human.pipeline import load_character, character_dir
+    cfg = load_character(name)
+    cur = character_dir(name) / cfg.get("look", "looks/default.png")
+    if not cur.exists():
+        raise HTTPException(404, "当前形象图不存在")
+    out = character_dir(name) / "looks" / f"edit_{int(time.time())}.png"
+    wavespeed.WaveSpeed().image_edit(cur, req["prompt"], out)
+    return {"look": f"looks/{out.name}", "path": str(out.relative_to(C.ROOT))}
+
+
 # ---------------- status ----------------
 
 @app.get("/api/health")
 def health():
     return {
+        "wavespeed": {"configured": bool(C.WAVESPEED_API_KEY),
+                      "url": "https://api.wavespeed.ai"},
+        "minimax": {"configured": bool(C.MINIMAX_API_KEY),
+                    "url": C.MINIMAX_BASE_URL},
         "comfyui": {"url": C.COMFYUI_BASE_URL, "ok": comfyui.ComfyUI().health()},
-        "minimax": {"configured": bool(C.MINIMAX_API_KEY)},
         "mpt": {"url": C.MPT_BASE_URL, "ok": mpt.MPT().health()},
         "sau": {"installed": publisher.sau_available()},
     }
@@ -146,6 +284,8 @@ class VTReq(BaseModel):
     background: str | None = None
     mask: str | None = None
     workflow: str | None = None
+    mode: str = "replace"            # replace | animate2
+    pre_edit_prompt: str | None = None
     title: str | None = None
     desc: str = ""
     tags: list[str] = []
@@ -189,8 +329,9 @@ def job_vt(req: VTReq, bg: BackgroundTasks):
         jid, pipeline.run, _resolve(req.source), prompt=req.prompt,
         face=_resolve(req.face), cloth=_resolve(req.cloth),
         background=_resolve(req.background), mask=_resolve(req.mask),
-        workflow=req.workflow, title=req.title, desc=req.desc,
-        tags=req.tags, jid=jid))
+        workflow=req.workflow, mode=req.mode,
+        pre_edit_prompt=req.pre_edit_prompt,
+        title=req.title, desc=req.desc, tags=req.tags, jid=jid))
 
 
 @app.post("/api/jobs/auto-content")

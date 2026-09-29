@@ -1,8 +1,53 @@
 # 技术选型决策记录
 
-> 调研日期: 2026-09-30。原则: 优先复用成熟开源工程，自建只做胶水层。
+> 调研日期: 2026-09-30；v2 修订: 同日 (用户反馈 + 服务器环境确认)。
+> 原则: 优先复用成熟开源工程，自建只做胶水层；产品要傻瓜式，推理走托管 API。
 
-## 总体架构
+## v2 架构修订 (2026-09-30)
+
+**环境事实**: 本机 Mac M4 16GB；服务器 103.52.153.212 为 4核/4GB/**无 GPU** 的小 VPS (有 Docker、公网 IP，已运行其他业务)。
+两者均无法本地跑视频扩散模型。
+
+**用户反馈**: ComfyUI 对用户太重 —— 它不是给使用者的界面。结论:
+**ComfyUI 只作为可选的自建 GPU 推理后端，产品前端是我们自己的傻瓜式 Web 工作台。**
+
+**推理引擎改为托管 API** (按次付费，零部署，国内可直连):
+
+| 环节 | 托管 API | 模型 |
+|---|---|---|
+| 音频→口播视频 | WaveSpeed `wavespeed-ai/infinitetalk` (含 fast/multi) | InfiniteTalk 开源模型的托管版 |
+| 对标视频换人(脸+衣) | WaveSpeed `wavespeed-ai/wan-2.2/animate` mode=replace | Wan2.2-Animate |
+| 动作迁移+换背景 | WaveSpeed `wavespeed-ai/wan-2.2/animate-2` (prompt 控背景) | Wan2.2-Animate-2 |
+| 换装/换发型(图片) | WaveSpeed `wavespeed-ai/qwen-image/edit-plus` | Qwen-Image-Edit-2509 |
+| 情感 TTS/声音克隆 | MiniMax `t2a_v2` / `voice_clone` | speech-2.8-hd |
+| 备选 | MiniMax H3 视频生成 / fal.ai 同族模型 / 阿里云 wan2.2-animate-mix | |
+
+**关键洞察**: Wan2.2-Animate `replace` 模式是"把参考图里整个人换进视频、保留动作场景"——
+所以"换脸+换衣服"= 先用图像编辑模型把形象照改成目标造型 → 整人替换，一条 API 链路完成。
+
+**关于 speech2speech**: 按名字检索 GitHub，该项目族均为"实时语音对话 pipeline"
+(VAD→STT→LLM→TTS，如 huggingface/speech-to-speech)，方向是**交互式语音助手**，
+与本需求(输入文字→有感情朗读→口播视频)不同，未采用。
+最接近"产品化数字人"的开源成品是 Linly-Talker / HeyGem.ai / metahuman-stream，
+但均需 GPU，故数字人链路用托管 InfiniteTalk 实现同等能力。待用户确认其所指项目后再评估。
+
+## 总体架构(v2)
+
+```
+服务器 103.52.153.212 (Docker, 无GPU)
+└─ aimf-app: FastAPI 编排器 + 傻瓜式Web工作台 + 审核队列 + APScheduler + sau发布
+       │ HTTP API 调用
+       ├─ WaveSpeed AI: InfiniteTalk 口播 / Wan2.2-Animate 换人 / Qwen-Edit 换装
+       ├─ MiniMax: speech-2.8 TTS / voice_clone / H3
+       └─ (可选) 云端 ComfyUI: VACE 精修通道
+
+本机 Mac: 开发 + 同一套代码本地可跑 (scripts/run_orchestrator.sh)
+```
+
+## v1 备选架构 (自建 GPU 通道, 保留)
+
+当需要更精细的局部编辑(VACE 遮罩级)、或不想按次付费时，可在 GPU 服务器上部署
+ComfyUI 作为推理引擎，编排器通过 `COMFYUI_BASE_URL` 调用 —— 对用户仍然透明。
 
 ```
 ┌─────────────────────────── 本机 (Mac M4, 编排/审核/上传) ───────────────────────────┐

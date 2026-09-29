@@ -1,0 +1,21 @@
+services:
+  app:
+    build: .
+    container_name: aimf-app
+    restart: unless-stopped
+    ports:
+      - "8800:8800"
+    env_file: .env
+    environment:
+      # 容器内 sau 使用镜像内安装版本
+      SAU_BIN: /usr/local/bin/sau
+      ORCH_TOKEN: ${ORCH_TOKEN:-}
+    volumes:
+      - ./outputs:/app/outputs        # 作品产物(审核/发布)
+      - ./assets:/app/assets          # 角色/素材
+      - ./data:/app/data              # 任务库
+      - ./config.yaml:/app/config.yaml
+      - sau_cookies:/opt/sau/cookies  # 抖音登录态持久化
+
+volumes:
+  sau_cookies:

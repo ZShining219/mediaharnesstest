@@ -1,111 +1,91 @@
-# AI 传媒工作流
+# AI 传媒工作台
 
-基于开源组件搭建的个人 AI 自媒体生产流水线：**数字人口播**、**对标视频转换(换脸/换衣/换背景)**、**自动化创作**，统一经 **审核队列** 后自动发布到抖音等平台。
+一个**独立、产品化、傻瓜式**的 AI 自媒体生产工具：**数字人口播**、**对标视频转换（换人/换衣/换背景）**、**自动化创作**，生成内容统一进**审核队列**，验收后自动发布到抖音等平台。
 
-> 选型决策与对比详见 [docs/decisions.md](docs/decisions.md)。
+> 全部功能 = 网页上的固定操作卡片，不需要懂节点/工作流。
+> 选型决策详见 [docs/decisions.md](docs/decisions.md)。
 
-## 架构
+## 产品形态
 
 ```
-本机 (Mac, 编排/审核/后处理/上传)
-  orchestrator  FastAPI + 审核页 http://127.0.0.1:8800
-    ├─ pipelines/digital_human   文案→情感TTS→口型视频→字幕BGM→审核
-    ├─ pipelines/video_transform 对标视频+参考图→VACE 转换→审核
-    ├─ pipelines/auto_content    主题→MoneyPrinterTurbo 成片→审核
-    ├─ APScheduler 定时任务 (config.yaml)
-    └─ publisher → social-auto-upload (sau) → 抖音/小红书/B站/视频号
+你的服务器 103.52.153.212 (Docker, 无GPU也够用)
+└── aimf-app  Web 工作台 http://103.52.153.212:8800
+      ├─ 工作台:    三张功能卡(数字人/视频转换/自动创作) + 素材上传
+      ├─ 审核队列:  预览 → 通过/打回 → 填标题/定时
+      ├─ 发布:      social-auto-upload → 抖音(扫码登录,cookie持久化)
+      └─ 定时任务:  config.yaml cron → 夜间批量生成/定点发布
 
-算力 (二选一或混用)
-  ComfyUI 云端GPU ≥24G   InfiniteTalk 口播 / Wan2.2-VACE 视频编辑 / Qwen-Image-Edit 换装
-  MiniMax API            H3 视频生成 / speech-2.8 情感TTS+声音克隆 (零部署)
+推理引擎(全部托管 API, 按次付费, 零 GPU 部署)
+  ├─ WaveSpeed AI   InfiniteTalk(图+音频→口播) / Wan2.2-Animate(换人) / Qwen-Image-Edit(换装)
+  ├─ MiniMax        speech-2.8 情感TTS + 声音克隆 / H3 视频生成
+  └─ MoneyPrinterTurbo (可选本地服务) 主题→自动成片
 ```
 
-复用的开源工程（`services/`，不要重复造轮子）：
-
-| 组件 | 用途 | 说明 |
-|---|---|---|
-| [ComfyUI](https://github.com/comfyanonymous/ComfyUI) | 可视化工作流页面 | 你要的"图形操作页面"就是它，节点式可调可控 |
-| [MoneyPrinterTurbo](https://github.com/harry0703/MoneyPrinterTurbo) | 自动化成片 | WebUI+API，AI 写稿/素材/字幕/BGM 全链路 |
-| [social-auto-upload](https://github.com/dreammis/social-auto-upload) | 多平台发布 | `sau` CLI，抖音扫码登录 + 定时发布 |
-
-## 快速开始
-
-```bash
-bash scripts/setup.sh                 # 装编排器 + sau + 克隆组件
-cp .env.example .env                  # 填 MINIMAX_API_KEY 等
-cp config.example.yaml config.yaml    # 按需调整
-scripts/run_orchestrator.sh           # 打开 http://127.0.0.1:8800
-```
-
-页面功能：**审核队列**(预览/通过/打回/填标题定时发布) · **提交任务** · **任务记录** · **待发布** · **服务状态**。
+`ComfyUI` 保留为高级通道（config.yaml `backend: comfyui`），用于将来接入自建 GPU 做更精细的局部编辑——用户界面不变，普通使用完全不需要它。
 
 ## 三条管线
 
-### 1. 数字人口播
+| 功能 | 操作 | 底层 |
+|---|---|---|
+| 数字人口播 | 选角色 + 粘文案 + 选情绪 → 生成 | MiniMax 克隆音色 TTS → InfiniteTalk 对口型 → 字幕/BGM/响度 |
+| 视频转换 | 上传对标视频 + 选形象图 → 转换 | (可选)Qwen-Image-Edit 先换装 → Wan2.2-Animate 整人替换；animate2 模式提示词换背景 |
+| 自动创作 | 填主题 → 生成 | MoneyPrinterTurbo 全链路 |
+
+命令行同样可用：`python -m pipelines.digital_human.pipeline --text "..." --character default` 等。
+
+## 部署
+
+服务器已部署：`docker compose -p aimf` 于 `/opt/aimf`，容器 `aimf-app`，访问需 token：
+
 ```
-文案 → MiniMax TTS(克隆音色+情绪) → InfiniteTalk(图+音频→口型视频) → 字幕/响度/BGM → 审核
-```
-```bash
-.venv/bin/python -m pipelines.digital_human.pipeline \
-  --text "大家好，今天分享三个效率工具" --character default --emotion happy --tags AI,效率
+http://103.52.153.212:8800/?token=<见服务器 .env ORCH_TOKEN>
 ```
 
-### 2. 对标视频转换（换脸/换衣/换背景）
-```
-舞蹈视频 + 人脸/服装/背景参考图 → ComfyUI VACE 工作流 → 审核
-```
+重新部署（代码更新后）：
+
 ```bash
-.venv/bin/python -m pipelines.video_transform.pipeline \
-  --source assets/dance.mp4 --face assets/characters/default/looks/default.png \
-  --cloth assets/garments/red_dress.jpg --prompt "现代都市夜景，年轻女性街舞"
+SSH_PASS=<服务器密码> uv run --with paramiko scripts/deploy_server.py
 ```
 
-### 3. 自动化创作（教程/科普类）
-```bash
-.venv/bin/python -m pipelines.auto_content.pipeline --subject "Kimi 用法教程"
-# 需先启动 MPT: cd services/MoneyPrinterTurbo && uv run python main.py
-```
-
-审核通过 → `outputs/approved/` → sau 发布（立即或 `--schedule` 定时）→ `outputs/published/`。
-稳定后开 `config.yaml` 的 `schedules.jobs` 即可只做验收。
+本地开发：`scripts/setup.sh` → `scripts/run_orchestrator.sh` → http://127.0.0.1:8800
 
 ## 待办授权清单（需要你操作）
 
 | # | 事项 | 操作 |
 |---|---|---|
-| 1 | MiniMax API | `.env` 填 `MINIMAX_API_KEY`（+`MINIMAX_GROUP_ID`） |
-| 2 | 抖音登录 | `services/social-auto-upload/.venv/bin/sau douyin login --account main` 扫码 |
-| 3 | 云端 GPU ComfyUI | 见 [docs/cloud-gpu.md](docs/cloud-gpu.md)；或先用 RunningHub 在线版验证工作流 |
-| 4 | 本人声音样本 | 10s–5min 干净录音 → `assets/voices/`；调 `Minimax.clone_voice` 得 voice_id 写入 `assets/characters/default/config.json` |
-| 5 | 人物照片 | 清晰正面半身照 → `assets/characters/default/looks/default.png`；更多参考放 `refs/` |
-| 6 | ComfyUI 工作流 | 云端搭好后"导出API格式"存 `orchestrator/workflows/` 并配 `.map.yaml`（见该目录 README） |
-| 7 | 腾讯云 MPS（可选） | `.env` 填 `TENCENT_SECRET_ID/KEY` 启用转码/智能字幕 |
-| 8 | MPT（可选） | `bash scripts/setup.sh --mpt`；`config.toml` 里 LLM 可填 MiniMax key |
+| 1 | **WaveSpeed key**（最优先，承担数字人+视频转换） | wavespeed.ai 注册充值 → `.env` 填 `WAVESPEED_API_KEY`（服务器 `/opt/aimf/.env` 同步填，改后 `docker compose up -d --force-recreate`） |
+| 2 | MiniMax key | `.env` 填 `MINIMAX_API_KEY`（+GroupID），用于情感 TTS/声音克隆/H3 |
+| 3 | 抖音登录 | `ssh root@103.52.153.212` → `docker exec -it aimf-app sau douyin login --account main`，终端会出二维码，抖音 App 扫码 |
+| 4 | 声音克隆 | Web 素材库上传 10s+ 干净录音 → 角色卡"克隆声音"按钮一键完成 |
+| 5 | 形象照 | 角色卡"上传形象图"传一张清晰正面半身照 |
+| 6 | 腾讯云 MPS（可选） | `.env` 填 `TENCENT_SECRET_ID/KEY` |
+| 7 | MPT（可选） | 本地 `bash scripts/setup.sh --mpt`；或后续加到 compose |
 
 ## 目录结构
 
 ```
-orchestrator/        编排器: FastAPI 审核/提交/调度 + ComfyUI/MiniMax/MPT/sau 客户端
-  workflows/         ComfyUI API格式工作流模板 + 参数映射 (.map.yaml)
-pipelines/           三条管线 (digital_human / video_transform / auto_content)
-services/            克隆的开源组件 (gitignore)
-assets/              characters(形象+声音配置) / garments / bgm / scripts / voices
-outputs/             review → approved → published / failed, tmp 中间产物
+orchestrator/        编排器: FastAPI + 工作台UI + ComfyUI/MiniMax/WaveSpeed/MPT/sau 客户端
+pipelines/           digital_human / video_transform / auto_content
+services/            开源组件: social-auto-upload(已入镜像) / MoneyPrinterTurbo / ComfyUI
+assets/              characters(形象looks+声音配置) / sources / garments / voices / bgm
+outputs/             review → approved → published / failed / tmp
+data/jobs.db         任务记录
 docs/                decisions / cloud-gpu / douyin / minimax
-scripts/             setup.sh, run_*.sh, cloud_comfyui_bootstrap.sh
-data/jobs.db         任务记录 (sqlite)
+scripts/             setup.sh / run_*.sh / deploy_server.py / cloud_comfyui_bootstrap.sh
+Dockerfile           单容器产品镜像 (编排器 + sau + ffmpeg + chromium)
 ```
 
 ## 路线图
 
-- [x] 编排器 + 审核页 + 三条管线骨架
-- [x] MiniMax TTS/克隆/视频 API 封装，sau 发布封装
-- [ ] 云端 ComfyUI 部署 + 工作流模板导入验证（待 GPU 资源）
-- [ ] 数字人换装/换发型管线（Qwen-Image-Edit 模板 + `looks/` 版本管理）
-- [ ] VACE 工作流模板调优（遮罩策略/Phantom 权重）
-- [ ] pyJianYingDraft 剪映草稿生成（教程类精剪）
-- [ ] 审核通过→多平台分发（小红书/B站/视频号）
-- [ ] IndexTTS-2.5 本地 TTS 引擎接入（开源备选）
+- [x] 产品化 Web 工作台（固定功能卡 + 上传 + 审核 + 发布）
+- [x] WaveSpeed 托管推理接入（InfiniteTalk / Wan-Animate / Qwen-Image-Edit）
+- [x] MiniMax TTS/克隆 API、Docker 化部署到你的服务器、token 保护
+- [ ] 端到端首条数字人样片（待 WaveSpeed/MiniMax key）
+- [ ] 定时任务跑通（cron 批量生成 + 定点发布）
+- [ ] 角色形象版本库完善（多 look 切换）
+- [ ] MPT 容器化加入 compose（可选）
+- [ ] 多平台分发（小红书/B站/视频号一键多发）
+- [ ] ComfyUI 高级通道（自建 GPU 时启用 VACE 精修）
 
 ---
 *README 随项目演进持续更新。*

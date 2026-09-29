@@ -5,9 +5,11 @@
 # ---------- 数字人默认参数 ----------
 digital_human:
   # 动画后端:
-  #   "comfyui"  -> InfiniteTalk 工作流(推荐, 口型精准, 需要云端GPU ComfyUI)
-  #   "minimax"  -> MiniMax-H3 参考图生视频(零部署, 口型对齐弱, 适合非口播/氛围镜头)
-  backend: comfyui
+  #   "wavespeed" -> 托管 InfiniteTalk(推荐, 零部署, 口型精准, 按次计费)
+  #   "minimax"   -> MiniMax-H3 参考图生视频(零部署, 口型对齐弱, 适合氛围镜头)
+  #   "comfyui"   -> 自建 ComfyUI GPU 上的 InfiniteTalk 工作流(质量/成本可控)
+  backend: wavespeed
+  resolution: 720p
   # ComfyUI 工作流模板名(orchestrator/workflows/ 下的文件名, 不含扩展名)
   workflow: digital_human_infinitetalk
   # TTS 引擎: "minimax"(云端, 推荐) / "indextts"(本地开源, 待接入)
@@ -24,7 +26,13 @@ digital_human:
 
 # ---------- 视频换装/换脸/换背景 ----------
 video_transform:
-  # ComfyUI 工作流模板名: 用 Wan2.2-VACE(+Phantom) 的导出 JSON
+  # 后端:
+  #   "wavespeed" -> Wan2.2-Animate 托管 API(推荐, 零部署):
+  #                  整人替换(换脸+换衣=先编辑形象图再整人换入), animate2 可换背景
+  #   "comfyui"   -> 自建 GPU 上的 VACE 工作流(局部重绘, 更精细但需部署)
+  backend: wavespeed
+  resolution: 720p
+  # ComfyUI 工作流模板名(backend=comfyui 时生效): 用 Wan2.2-VACE(+Phantom) 的导出 JSON
   workflow: video_vace_transform
   # 脸部精修(可选, 第二阶段工作流, 如 ReActor/PuLID 换脸): 空为跳过
   face_detail_workflow: ""

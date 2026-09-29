@@ -1,0 +1,17 @@
+.git
+.venv
+__pycache__
+outputs/tmp
+outputs/review
+outputs/approved
+outputs/published
+outputs/failed
+data/*.db
+.env
+services/ComfyUI
+services/MoneyPrinterTurbo
+services/*/.venv
+services/*/cookies
+*.pyc
+.DS_Store
+logs

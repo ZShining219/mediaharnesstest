@@ -51,6 +51,16 @@ def synth_voice(text: str, voice_id: str, out: Path,
     raise PipelineError(f"未知 TTS 引擎: {engine}")
 
 
+def animate_wavespeed(portrait: Path, audio: Path, prompt_text: str,
+                      jid: str) -> Path:
+    """WaveSpeed 托管 InfiniteTalk: 图+音频 -> 口型视频 (无需GPU)"""
+    from orchestrator.app import wavespeed
+    ws = wavespeed.WaveSpeed()
+    resolution = C.section("digital_human").get("resolution", "720p")
+    return ws.infinitetalk(portrait, audio, C.TMP_DIR / f"{jid}_raw.mp4",
+                           prompt=prompt_text, resolution=resolution)
+
+
 def animate_comfyui(portrait: Path, audio: Path, prompt_text: str,
                     workflow: str, jid: str) -> Path:
     """通过 ComfyUI 工作流(InfiniteTalk 等)生成口型视频"""
@@ -108,12 +118,14 @@ def run(text: str, character: str = "default", emotion: str | None = None,
         speak_prompt = prompt or char_cfg.get("default_prompt") or \
             "一位主播自然地对着镜头说话，表情生动，画质清晰"
 
-        backend = cfg.get("backend", "comfyui")
+        backend = cfg.get("backend", "wavespeed")
         if backend == "comfyui":
             raw = animate_comfyui(portrait, audio, speak_prompt,
                                   cfg.get("workflow", "digital_human_infinitetalk"), jid)
-        else:
+        elif backend == "minimax":
             raw = animate_minimax(portrait, speak_prompt, jid)
+        else:  # wavespeed (默认, 零部署)
+            raw = animate_wavespeed(portrait, audio, speak_prompt, jid)
 
         final = raw
         # 若生成视频不含音轨, 合成 TTS 音频
