@@ -16,20 +16,18 @@ services:
       - ./config.yaml:/app/config.yaml
       - sau_cookies:/opt/sau/cookies  # 抖音登录态持久化
 
-  # 素材管理器 copyparty (github.com/9001/copyparty)
-  # 直接管理 ./assets(素材) 与 ./outputs(产出) —— 传上去即可被画布引用
+  # 素材管理器 OpenList (openlistteam/openlist, 中文现代网盘UI)
+  # 挂载 ./assets 与 ./outputs —— 上传即被管线/画布引用
   assets-ui:
-    image: copyparty/ac
+    image: openlistteam/openlist:latest
     container_name: aimf-assets
     restart: unless-stopped
     ports:
-      - "3923:3923"
+      - "3923:5244"
     volumes:
-      - ./assets:/w/assets
-      - ./outputs:/w/outputs
-      - ./data/copyparty:/cfg
-    # 注意: 不要加 -c 参数——镜像的 /z/initcfg 会自动包含 /cfg 下所有 .conf
-    # 配置文件: ./data/copyparty/copyparty.conf (含账号密码, 不进git)
+      - ./data/openlist:/opt/openlist/data
+      - ./assets:/opt/openlist/mnt/assets
+      - ./outputs:/opt/openlist/mnt/outputs
 
 volumes:
   sau_cookies:
