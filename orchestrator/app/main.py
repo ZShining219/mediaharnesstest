@@ -46,6 +46,12 @@ def index():
     return (TPL / "index.html").read_text(encoding="utf-8")
 
 
+@app.get("/api/config/public")
+def public_cfg():
+    """前端需要的非敏感配置(素材管理器免密链接等)"""
+    return {"assets_pw": C.env("ASSETS_PW", "")}
+
+
 @app.get("/media/{item_id}")
 def media_file(item_id: str):
     for d in (C.REVIEW_DIR, C.APPROVED_DIR, C.PUBLISHED_DIR, C.FAILED_DIR):
