@@ -28,14 +28,8 @@ services:
       - ./assets:/w/assets
       - ./outputs:/w/outputs
       - ./data/copyparty:/cfg
-    environment:
-      # 在 .env 设 ASSETS_PW (默认 admin)
-      CPP: |
-        --accounts admin:${ASSETS_PW:-admin}
-        --volumes /w/assets:/w/assets:rwm:admin
-        --volumes /w/outputs:/w/outputs:rwm:admin
-        --e2dsa --e2ts --th-size 320x320 --theme 2
-    # e2dsa=索引+搜索+缩略图  e2ts=媒体元数据  theme=暗色
+    # 注意: 不要加 -c 参数——镜像的 /z/initcfg 会自动包含 /cfg 下所有 .conf
+    # 配置文件: ./data/copyparty/copyparty.conf (含账号密码, 不进git)
 
 volumes:
   sau_cookies:

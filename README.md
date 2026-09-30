@@ -15,7 +15,8 @@
       ├─ 节点画布:  ComfyUI 式节点编辑器(litegraph.js), 节点类型由后端注册表驱动
       │             素材/模型调用/后处理/输出 四类18种节点, 类型化连线, 图即任务
       │             提交 → 后端拓扑执行 → 节点实时染色 → 产出进审核队列
-      ├─ 素材库:    浏览器上传 视频/形象图/服装图/声音样本/BGM + 角色管理(传形象/克隆声音/换装)
+      ├─ 素材库:    copyparty 素材管理器(:3923, 拖拽批量上传/缩略图/搜索/预览)
+      │             + 画布节点内嵌上传; 素材即 assets/ 目录, 管线直接引用
       ├─ 审核队列:  预览 → 通过/打回 → 填标题/定时
       ├─ 发布:      social-auto-upload → 抖音(扫码登录,cookie持久化)
       └─ 定时任务:  config.yaml cron → 夜间批量生成/定点发布
@@ -53,6 +54,9 @@
 ```
 http://103.52.153.212:8800/?token=<见服务器 .env ORCH_TOKEN>
 ```
+
+素材管理器（copyparty）：`http://103.52.153.212:3923`，账号 `admin`，密码见服务器 `.env` 的 `ASSETS_PW`。
+目录约定（传对文件夹即被管线引用）：`/assets/sources` 对标视频、`/assets/images` 参考图、`/assets/garments` 服装图、`/assets/voices` 声音样本、`/assets/bgm` 背景音乐、`/assets/characters/<角色>/looks` 形象版本；`/outputs` 查看产出物。
 
 重新部署（代码更新后）：
 
