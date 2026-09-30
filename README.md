@@ -55,8 +55,9 @@
 http://103.52.153.212:8800/?token=<见服务器 .env ORCH_TOKEN>
 ```
 
-素材管理器（copyparty）：`http://103.52.153.212:3923`，账号 `admin`，密码见服务器 `.env` 的 `ASSETS_PW`。
-目录约定（传对文件夹即被管线引用）：`/assets/sources` 对标视频、`/assets/images` 参考图、`/assets/garments` 服装图、`/assets/voices` 声音样本、`/assets/bgm` 背景音乐、`/assets/characters/<角色>/looks` 形象版本；`/outputs` 查看产出物。
+素材管理器（OpenList，中文界面）：`http://103.52.153.212:3923`，账号 `admin`，密码见服务器 `.env` 的 `ASSETS_PW`。
+两个挂载点：`/素材`（=./assets）、`/产出`（=./outputs）。
+目录约定（传对文件夹即被管线引用）：`素材/sources` 对标视频、`素材/images` 参考图、`素材/garments` 服装图、`素材/voices` 声音样本、`素材/bgm` 背景音乐、`素材/characters/<角色>/looks` 形象版本。
 
 重新部署（代码更新后）：
 

@@ -210,9 +210,9 @@
   <div class="card"><h3>素材上传</h3>
     <div style="margin-bottom:10px">
       <a class="btn" style="display:inline-block;text-decoration:none" id="fm-link"
-         href="#" onclick="this.href='http://'+location.hostname+':3923/?pw='+(window.ASSETS_PW||'');return true" target="_blank">
-        📂 打开素材管理器 (copyparty)</a>
-      <span class="dim" style="font-size:12px">免密直达(密码已带入链接)。支持拖拽批量上传、缩略图、搜索、在线预览;传到对应文件夹即被画布引用</span>
+         href="#" onclick="this.href='http://'+location.hostname+':3923';return true" target="_blank">
+        📂 打开素材管理器 (OpenList)</a>
+      <span class="dim" style="font-size:12px">账号 admin / 密码同服务器 .env 的 ASSETS_PW，登录一次即保持会话。中文网盘界面：拖拽批量上传、缩略图、在线预览/播放、重命名/移动/删除</span>
     </div>
     <div class="row2">
       <div class="drop" onclick="upFile('source')">📹 上传对标视频</div>
@@ -256,8 +256,6 @@ document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
   if(b.dataset.tab==='canvas'){ initNodeCanvas(); return }
   load(b.dataset.tab);
 });
-
-api('/api/config/public').then(r=>window.ASSETS_PW=r.assets_pw||'');
 
 async function refreshMeta(){
   [ASSETS,CHARS]=await Promise.all([api('/api/assets'),api('/api/characters')]);
