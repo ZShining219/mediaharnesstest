@@ -17,17 +17,29 @@ services:
       - sau_cookies:/opt/sau/cookies  # 抖音登录态持久化
 
   # 素材管理器 OpenList (openlistteam/openlist, 中文现代网盘UI)
-  # 挂载 ./assets 与 ./outputs —— 上传即被管线/画布引用
+  # 仅对内暴露, 经 assets-proxy(nginx gzip+缓存) 对外提速
   assets-ui:
     image: openlistteam/openlist:latest
     container_name: aimf-assets
     restart: unless-stopped
-    ports:
-      - "3923:5244"
+    expose:
+      - "5244"
     volumes:
       - ./data/openlist:/opt/openlist/data
       - ./assets:/opt/openlist/mnt/assets
       - ./outputs:/opt/openlist/mnt/outputs
+
+  # nginx 反代: gzip + 静态资源长缓存 + 允许工作台 iframe 内嵌
+  assets-proxy:
+    image: nginx:alpine
+    container_name: aimf-assets-proxy
+    restart: unless-stopped
+    depends_on:
+      - assets-ui
+    ports:
+      - "3923:80"
+    volumes:
+      - ./docker/assets-proxy.conf:/etc/nginx/conf.d/default.conf:ro
 
 volumes:
   sau_cookies:
