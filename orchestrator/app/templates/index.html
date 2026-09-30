@@ -154,6 +154,12 @@
     <div id="chardetail"></div>
   </div>
   <div class="card"><h3>素材上传</h3>
+    <div style="margin-bottom:10px">
+      <a class="btn" style="display:inline-block;text-decoration:none" id="fm-link"
+         href="#" onclick="this.href='http://'+location.hostname+':3923';return true" target="_blank">
+        📂 打开素材管理器 (copyparty)</a>
+      <span class="dim" style="font-size:12px">账号 admin / 密码见服务器 .env 的 ASSETS_PW — 支持拖拽批量上传、缩略图、搜索、在线预览;传到对应文件夹即被画布引用</span>
+    </div>
     <div class="row2">
       <div class="drop" onclick="upFile('source')">📹 上传对标视频</div>
       <div class="drop" onclick="upFile('image')">🖼️ 上传参考图</div>
