@@ -40,6 +40,8 @@ def run(source: Path, prompt: str = "", face: Path | None = None,
         cloth: Path | None = None, background: Path | None = None,
         mask: Path | None = None, workflow: str | None = None,
         mode: str = "replace", pre_edit_prompt: str | None = None,
+        keep_audio: bool = True, bgm: str | None = None,
+        resolution: str | None = None,
         title: str | None = None, desc: str = "", tags: list[str] | None = None,
         jid: str | None = None) -> dict:
     cfg = C.section("video_transform")
@@ -49,10 +51,24 @@ def run(source: Path, prompt: str = "", face: Path | None = None,
     try:
         if backend == "wavespeed":
             out = _run_wavespeed_path(
-                jid, cfg, source, face, cloth, prompt, mode, pre_edit_prompt)
+                jid, cfg, source, face, cloth, prompt, mode, pre_edit_prompt,
+                resolution or cfg.get("resolution", "720p"))
         else:
             out = _run_comfyui_path(jid, cfg, workflow, source, prompt,
                                     face, cloth, background, mask)
+
+        # 后处理: 生成模型输出通常无声 → 回填源视频音轨; 可选 BGM
+        from orchestrator.app import media
+        if keep_audio and not media.has_audio(out) and media.has_audio(source):
+            muxed = C.TMP_DIR / f"{jid}_mux.mp4"
+            media.mux_audio(out, source, muxed)
+            out = muxed
+        if bgm:
+            bgm_path = C.ASSETS / "bgm" / bgm
+            if bgm_path.exists():
+                mixed = C.TMP_DIR / f"{jid}_bgm.mp4"
+                media.mix_bgm(out, bgm_path, mixed)
+                out = mixed
 
         # 可选第二阶段: 脸部精修工作流 (如 ReActor/PuLID)
         face_wf = cfg.get("face_detail_workflow")
@@ -76,7 +92,7 @@ def run(source: Path, prompt: str = "", face: Path | None = None,
             "title": title or source.stem, "desc": desc, "tags": tags or [],
             "source": source.name, "prompt": prompt, "mode": mode,
         })
-        store.job_finish(jid, "done", {"item": str(item)})
+        store.job_finish(jid, "done", {"item": str(item), "item_id": item.stem})
         return {"job": jid, "item": str(item)}
     except Exception as e:
         store.job_finish(jid, "error", {"error": str(e)})
@@ -84,7 +100,7 @@ def run(source: Path, prompt: str = "", face: Path | None = None,
 
 
 def _run_wavespeed_path(jid, cfg, source, face, cloth, prompt, mode,
-                        pre_edit_prompt) -> Path:
+                        pre_edit_prompt, resolution="720p") -> Path:
     """零部署路径: (可选换装编辑) -> Wan-Animate 整人替换"""
     if not face:
         raise PipelineError("wavespeed 模式需要 --face 目标形象图(人物全身/半身照)")
@@ -98,7 +114,7 @@ def _run_wavespeed_path(jid, cfg, source, face, cloth, prompt, mode,
         character = edited
     out = C.TMP_DIR / f"{jid}_vace.mp4"
     return run_wavespeed(source, character, out, prompt=prompt, mode=mode,
-                         resolution=cfg.get("resolution", "720p"))
+                         resolution=resolution)
 
 
 def _run_comfyui_path(jid, cfg, workflow, source, prompt,

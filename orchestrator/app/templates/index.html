@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>AI 传媒工作台</title>
+<link rel="stylesheet" href="/static/vendor/litegraph.css">
 <style>
   :root { --bg:#0e1014; --card:#171a21; --line:#272b36; --fg:#e8eaf0; --dim:#8a90a0;
           --acc:#5b8cff; --ok:#2ea36c; --bad:#e05a5a; --warn:#d9a13b; }
@@ -59,6 +60,7 @@
   <h1>🎬 AI 传媒工作台</h1>
   <nav>
     <button class="on" data-tab="studio">工作台</button>
+    <button data-tab="canvas">节点画布</button>
     <button data-tab="review">审核 <span id="cnt"></span></button>
     <button data-tab="assets">素材库</button>
     <button data-tab="approved">待发布</button>
@@ -117,6 +119,24 @@
   </div>
 </section>
 
+<!-- ==================== 节点画布 ==================== -->
+<section id="canvas" style="display:none">
+  <div class="card" style="padding:10px 16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+    <label style="margin:0">管线</label>
+    <select id="pipe-tpl" style="width:200px;margin:0"></select>
+    <button class="btn green" onclick="runPipeline()">▶ 运行</button>
+    <button class="btn gray" onclick="initCanvas(TEMPLATES[$('#pipe-tpl').value])">重排</button>
+    <button class="btn gray" onclick="refreshCanvasLists()">刷新素材</button>
+    <span id="canvas-status" class="pill"></span>
+    <span class="dim" style="font-size:12px">
+      节点即功能卡：点节点里的下拉/输入框调参数，连线只是数据流向示意。生成完成自动进审核队列。
+    </span>
+  </div>
+  <div class="card" style="padding:0;overflow:hidden">
+    <canvas id="lgcanvas"></canvas>
+  </div>
+</section>
+
 <!-- ==================== 审核 ==================== -->
 <section id="review" style="display:none"></section>
 
@@ -170,6 +190,7 @@ document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
   document.querySelectorAll('main section').forEach(s=>s.style.display='none');
   const el=$('#'+b.dataset.tab);
   el.style.display=b.dataset.tab==='studio'?'grid':'block';
+  if(b.dataset.tab==='canvas'){ initNodeCanvas(); return }
   load(b.dataset.tab);
 });
 
@@ -191,7 +212,9 @@ function upFile(kind, extra){
     let url=`/api/upload?kind=${kind}`+(extra?`&${extra}`:'')+'&token='+TOKEN;
     const r=await fetch(url,{method:'POST',body:fd}).then(r=>r.json());
     if(r.path){toast('已上传 '+r.path)}else{toast('失败: '+(r.detail||''))}
-    refreshMeta(); if(document.querySelector('nav button.on').dataset.tab==='assets')load('assets');
+    const tab=document.querySelector('nav button.on').dataset.tab;
+    refreshMeta().then(()=>{if(tab==='assets')load('assets');
+      if(tab==='canvas'&&window.refreshCanvasLists)refreshCanvasLists()});
   }; inp.click();
 }
 async function uploadSelFile(inputId, kind){
@@ -336,7 +359,10 @@ async function load(tab){
   }
 }
 load('studio');
-setInterval(()=>{const on=document.querySelector('nav button.on');if(on)load(on.dataset.tab)},15000);
+setInterval(()=>{const on=document.querySelector('nav button.on');
+  if(on&&on.dataset.tab!=='canvas')load(on.dataset.tab)},15000);
 </script>
+<script src="/static/vendor/litegraph.js"></script>
+<script src="/static/canvas.js"></script>
 </body>
 </html>

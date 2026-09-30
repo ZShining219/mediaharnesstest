@@ -52,11 +52,11 @@ def synth_voice(text: str, voice_id: str, out: Path,
 
 
 def animate_wavespeed(portrait: Path, audio: Path, prompt_text: str,
-                      jid: str) -> Path:
+                      jid: str, resolution: str | None = None) -> Path:
     """WaveSpeed 托管 InfiniteTalk: 图+音频 -> 口型视频 (无需GPU)"""
     from orchestrator.app import wavespeed
     ws = wavespeed.WaveSpeed()
-    resolution = C.section("digital_human").get("resolution", "720p")
+    resolution = resolution or C.section("digital_human").get("resolution", "720p")
     return ws.infinitetalk(portrait, audio, C.TMP_DIR / f"{jid}_raw.mp4",
                            prompt=prompt_text, resolution=resolution)
 
@@ -97,6 +97,7 @@ def animate_minimax(portrait: Path, prompt_text: str, jid: str) -> Path:
 
 def run(text: str, character: str = "default", emotion: str | None = None,
         prompt: str | None = None, look: str | None = None,
+        resolution: str | None = None, subtitles: bool | None = None,
         title: str | None = None, desc: str = "", tags: list[str] | None = None,
         jid: str | None = None) -> dict:
     cfg = C.section("digital_human")
@@ -125,7 +126,7 @@ def run(text: str, character: str = "default", emotion: str | None = None,
         elif backend == "minimax":
             raw = animate_minimax(portrait, speak_prompt, jid)
         else:  # wavespeed (默认, 零部署)
-            raw = animate_wavespeed(portrait, audio, speak_prompt, jid)
+            raw = animate_wavespeed(portrait, audio, speak_prompt, jid, resolution)
 
         final = raw
         # 若生成视频不含音轨, 合成 TTS 音频
@@ -143,7 +144,7 @@ def run(text: str, character: str = "default", emotion: str | None = None,
                 out = C.TMP_DIR / f"{jid}_bgm.mp4"
                 media.mix_bgm(final, bgm, out, post.get("bgm_volume", 0.15))
                 final = out
-        if post.get("burn_subtitles"):
+        if subtitles if subtitles is not None else post.get("burn_subtitles"):
             srt = media.text_to_srt(text, media.ffprobe_duration(final),
                                   C.TMP_DIR / f"{jid}.srt")
             out = C.TMP_DIR / f"{jid}_sub.mp4"
@@ -155,7 +156,7 @@ def run(text: str, character: str = "default", emotion: str | None = None,
             "desc": desc, "tags": tags or [],
             "character": character, "backend": backend,
         })
-        store.job_finish(jid, "done", {"item": str(item)})
+        store.job_finish(jid, "done", {"item": str(item), "item_id": item.stem})
         return {"job": jid, "item": str(item)}
     except Exception as e:
         store.job_finish(jid, "error", {"error": str(e)})

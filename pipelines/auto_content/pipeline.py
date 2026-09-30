@@ -43,7 +43,8 @@ def run(subject: str, script: str = "", title: str | None = None,
             "title": title or subject[:20], "desc": desc or subject,
             "tags": tags or [], "mpt_task": task_id,
         })
-        store.job_finish(jid, "done", {"item": str(item), "task_id": task_id})
+        store.job_finish(jid, "done", {"item": str(item), "item_id": item.stem,
+                                       "task_id": task_id})
         return {"job": jid, "item": str(item)}
     except Exception as e:
         store.job_finish(jid, "error", {"error": str(e)})

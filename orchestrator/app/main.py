@@ -7,6 +7,7 @@ from pathlib import Path
 
 from fastapi import BackgroundTasks, Depends, FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from . import comfyui, config as C, mpt, publisher, scheduler, store
@@ -30,6 +31,9 @@ async def token_guard(request, call_next):
 @app.on_event("startup")
 def _startup():
     scheduler.start()
+
+
+app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
 
 
 # ---------------- pages ----------------
@@ -271,6 +275,8 @@ class DHReq(BaseModel):
     emotion: str | None = None
     look: str | None = None
     prompt: str | None = None
+    resolution: str | None = None
+    subtitles: bool | None = None
     title: str | None = None
     desc: str = ""
     tags: list[str] = []
@@ -286,6 +292,9 @@ class VTReq(BaseModel):
     workflow: str | None = None
     mode: str = "replace"            # replace | animate2
     pre_edit_prompt: str | None = None
+    keep_audio: bool = True
+    bgm: str | None = None
+    resolution: str | None = None
     title: str | None = None
     desc: str = ""
     tags: list[str] = []
@@ -318,6 +327,7 @@ def job_dh(req: DHReq, bg: BackgroundTasks):
     return _bg(bg, lambda: _run_guarded(
         jid, pipeline.run, req.text, character=req.character,
         emotion=req.emotion, look=req.look, prompt=req.prompt,
+        resolution=req.resolution, subtitles=req.subtitles,
         title=req.title, desc=req.desc, tags=req.tags, jid=jid))
 
 
@@ -331,6 +341,7 @@ def job_vt(req: VTReq, bg: BackgroundTasks):
         background=_resolve(req.background), mask=_resolve(req.mask),
         workflow=req.workflow, mode=req.mode,
         pre_edit_prompt=req.pre_edit_prompt,
+        keep_audio=req.keep_audio, bgm=req.bgm, resolution=req.resolution,
         title=req.title, desc=req.desc, tags=req.tags, jid=jid))
 
 
@@ -353,6 +364,14 @@ def _run_guarded(job_id, fn, *a, **kw):
 @app.get("/api/jobs")
 def jobs():
     return store.job_list()
+
+
+@app.get("/api/jobs/{jid}")
+def job_detail(jid: str):
+    for j in store.job_list(200):
+        if j["id"] == jid:
+            return j
+    raise HTTPException(404)
 
 
 @app.get("/api/workflows/{name}/inspect")
