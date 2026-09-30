@@ -41,6 +41,14 @@ def mix_bgm(video: Path, bgm: Path, out: Path, bgm_volume: float = 0.15):
          "-map", "0:v", "-map", "[a]", "-c:v", "copy", "-c:a", "aac", str(out))
 
 
+def concat(videos: list[Path], out: Path):
+    """顺序拼接多段视频(要求同编码参数)"""
+    lst = out.with_suffix(".txt")
+    lst.write_text("".join(f"file '{v.resolve()}'\n" for v in videos), encoding="utf-8")
+    _run("ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(lst),
+         "-c", "copy", str(out))
+
+
 def loudnorm(video: Path, out: Path):
     _run("-i", str(video), "-af", "loudnorm=I=-16:TP=-1.5:LRA=11",
          "-c:v", "copy", "-c:a", "aac", str(out))

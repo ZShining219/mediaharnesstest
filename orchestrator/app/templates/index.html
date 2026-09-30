@@ -125,11 +125,14 @@
     <label style="margin:0">管线</label>
     <select id="pipe-tpl" style="width:200px;margin:0"></select>
     <button class="btn green" onclick="runPipeline()">▶ 运行</button>
-    <button class="btn gray" onclick="initCanvas(TEMPLATES[$('#pipe-tpl').value])">重排</button>
+    <button class="btn" onclick="showAddNodeMenu(event)">＋ 添加节点</button>
+    <button class="btn gray" onclick="saveTemplate()">保存为模板</button>
+    <button class="btn gray" onclick="loadSelected()">重载模板</button>
     <button class="btn gray" onclick="refreshCanvasLists()">刷新素材</button>
     <span id="canvas-status" class="pill"></span>
     <span class="dim" style="font-size:12px">
-      节点即功能卡：点节点里的下拉/输入框调参数，连线只是数据流向示意。生成完成自动进审核队列。
+      双击画布空白可搜索添加节点；拖动端口连线（类型匹配才可连）；
+      节点内下拉/输入框调参数；运行时每节点实时显示状态色。
     </span>
   </div>
   <div class="card" style="padding:0;overflow:hidden">

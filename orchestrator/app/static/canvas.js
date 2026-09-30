@@ -1,31 +1,33 @@
 /* ============================================================
- * 轻量化节点画布 — 基于 litegraph.js (ComfyUI 同款画布引擎)
- * 设计原则: 固定管线节点, 节点即"功能卡", 连线为数据流向示意。
- * 参数收集按节点类型读取 widget 值 —— 用户即使断开连线也不影响运行。
+ * 节点画布 — ComfyUI 式工作流编辑器 (litegraph.js)
+ *
+ * 架构: 后端 /api/nodes 输出节点注册表 schema → 前端动态生成节点类型。
+ * 画布图 = 任务定义: 序列化 {nodes,links} 提交 /api/graph/run,
+ * 后端拓扑执行并回写每节点状态, 前端实时染色。
  * ============================================================ */
 
 const LGT = window.LiteGraph;
 let lgraph = null, lgcanvas = null, runningJob = null;
+let NODE_SCHEMA = [];   // /api/nodes 返回的注册表
 
 /* ---------- 工具 ---------- */
-function w(node, name) {           // 读 widget 值
+const NODE_COLORS = { material: '#1f3a4a', model: '#3a2a52', proc: '#2d4030', output: '#4a3a20' };
+
+function w(node, name) {
   const x = (node.widgets || []).find(w => w.name === name);
   return x ? x.value : undefined;
 }
 function setW(node, name, v) {
   const x = (node.widgets || []).find(w => w.name === name);
-  if (x) { x.value = v; if (x.callback) x.callback(v); }
+  if (x) { x.value = v; if (x.callback) x.callback(v, undefined, undefined, undefined, node); }
 }
-function nodeByType(t) { return lgraph.findNodesByType(t)[0]; }
-
-function setNodeState(node, state) { // run|ok|err|idle
-  const colors = { run: '#8a6d1f', ok: '#2ea36c', err: '#a04040', idle: null };
-  node.color = colors[state] || '#2a3548';
-  node._state = state;
+function setNodeState(node, state) {
+  const colors = { running: '#8a6d1f', ok: '#2ea36c', error: '#a04040', skipped: '#555' };
+  node.color = colors[state] || NODE_COLORS[node._cat] || '#222';
   node.setDirtyCanvas(true, true);
 }
+function mediaUrl(path) { return withToken('/api/assets/file?path=' + encodeURIComponent(path)); }
 
-/* 媒体预览: 画到节点下半区 */
 function attachPreview(node, url, isVideo) {
   if (isVideo) {
     const v = document.createElement('video');
@@ -38,283 +40,269 @@ function attachPreview(node, url, isVideo) {
     im.src = url;
   }
 }
-
 function drawPreview(ctx) {
   if (!this._img) return;
   const iw = this._img.videoWidth || this._img.width;
   const ih = this._img.videoHeight || this._img.height;
   if (!iw) return;
-  const bw = this.size[0] - 16;
-  const top = this.size[1] - 8 - bw * ih / iw;
-  ctx.drawImage(this._img, 8, Math.max(60, top), bw, Math.min(bw * ih / iw, this.size[1] - 70));
+  const bw = this.size[0] - 16, bh = this.size[1] - this._imgTop - 8;
+  ctx.drawImage(this._img, 8, this._imgTop, bw, Math.min(bw * ih / iw, bh));
 }
 
-function mediaUrl(path) { return withToken('/api/assets/file?path=' + encodeURIComponent(path)); }
+/* ---------- 参数 widget 工厂 ---------- */
+const ASSET_GROUPS = {
+  video: ['source'], image: ['image', 'garment'], audio: ['voice', 'bgm'],
+};
 
-function comboValues(list, placeholder) {
-  return placeholder ? [placeholder].concat(list) : list;
+function assetValues(group) {
+  return (ASSET_GROUPS[group] || [])
+    .flatMap(k => ASSETS[k] || []);
 }
 
-/* ---------- 节点定义 ---------- */
-function registerNodes() {
-  const mk = (type, title, build) => {
-    function N() { this.size = [250, 90]; build.call(this); }
-    N.title = title;
-    LGT.registerNodeType('aimf/' + type, N);
-  };
-
-  /* 素材输入节点: 下拉选素材 + 上传按钮 + 预览 */
-  function sourceNode(type, title, kind, extraWidgets) {
-    mk(type, title, function () {
-      const vals = comboValues(ASSETS[kind] || [], '--点击刷新选择--');
-      this.addWidget('combo', '素材', vals[0], v => {
-        if (v && !v.startsWith('--')) attachPreview(this, mediaUrl(v), kind === 'source');
-      }, { values: vals });
-      this.addWidget('button', '上传文件…', '', () => upFile(kind));
-      this.addWidget('button', '刷新列表', '', () => refreshCanvasLists());
-      (extraWidgets || []).forEach(fn => fn.call(this));
-      this.addOutput('out', 'media');
-      this.onDrawBackground = drawPreview;
-      this.size = [270, 300];
-    });
+function resolveOptions(spec, node, widget) {
+  if (spec === '@characters') return CHARS.map(c => c.name);
+  if (spec === '@looks') {
+    const ch = CHARS.find(c => c.name === w(node, '角色'));
+    return (ch && ch.looks || []).map(l => `assets/characters/${ch.name}/looks/${l}`);
   }
-
-  /* 对标视频输入 */
-  sourceNode('src_video', '对标视频', 'source');
-
-  /* 目标形象: 形象图 + 换装编辑 */
-  mk('character', '目标形象', function () {
-    const vals = comboValues(
-      [...(ASSETS.image || []), ...(ASSETS.garment || []),
-       ...CHARS.flatMap(c => (c.looks || []).map(l => `assets/characters/${c.name}/looks/${l}`))],
-      '--选择形象图--');
-    this.addWidget('combo', '形象', vals[0], v => {
-      if (v && !v.startsWith('--')) attachPreview(this, mediaUrl(v));
-    }, { values: vals });
-    this.addWidget('button', '上传形象图…', '', () => upFile('image'));
-    this.addWidget('text', '换装/换发型', '', () => { });
-    this.addOutput('out', 'media');
-    this.onDrawBackground = drawPreview;
-    this.size = [260, 150];
-  });
-
-  /* 文案 (数字人) */
-  mk('script', '口播文案', function () {
-    this.addWidget('text', '文案', '', () => { });
-    this.addWidget('text', '标题', '', () => { });
-    this.addWidget('text', '标签(,分隔)', '', () => { });
-    this.addOutput('out', 'text');
-    this.size = [260, 130];
-  });
-
-  /* 角色+声音 (数字人) */
-  mk('role', '角色/声音', function () {
-    const vals = CHARS.map(c => c.name);
-    this.addWidget('combo', '角色', vals[0] || 'default', () => { }, { values: vals });
-    this.addWidget('combo', '情绪', 'neutral', () => { },
-      { values: ['neutral', 'happy', 'sad', 'angry', 'surprise', 'fear', 'disgust'] });
-    this.addWidget('text', '画面提示词', '', () => { });
-    this.addOutput('out', 'role');
-    this.size = [250, 110];
-  });
-
-  /* 引擎节点 */
-  mk('engine_vt', '转换引擎 (Wan2.2-Animate)', function () {
-    this.addInput('source', 'media');
-    this.addInput('character', 'media');
-    this.addWidget('combo', '模式', 'replace', () => { },
-      { values: ['replace', 'animate2'] });
-    this.addWidget('combo', '分辨率', '720p', () => { }, { values: ['480p', '720p'] });
-    this.addWidget('text', '背景提示词', '', () => { });
-    this.addOutput('out', 'media');
-    this.size = [270, 140];
-  });
-
-  mk('engine_dh', '口播引擎 (InfiniteTalk)', function () {
-    this.addInput('role', 'role');
-    this.addInput('script', 'text');
-    this.addWidget('combo', '分辨率', '720p', () => { }, { values: ['480p', '720p'] });
-    this.addOutput('out', 'media');
-    this.size = [250, 110];
-  });
-
-  /* 后处理 */
-  mk('post', '后处理', function () {
-    this.addInput('in', 'media');
-    this.addWidget('toggle', '保留原声/加音轨', true, () => { });
-    this.addWidget('combo', 'BGM', '无', () => { },
-      { values: ['无'].concat((ASSETS.bgm || []).map(p => p.split('/').pop())) });
-    this.addOutput('out', 'media');
-    this.size = [240, 110];
-  });
-
-  /* 输出 */
-  mk('output', '输出 → 审核队列', function () {
-    this.addInput('in', 'media');
-    this.addWidget('text', '标题', '', () => { });
-    this.addWidget('text', '标签(,分隔)', '', () => { });
-    this.addWidget('button', '查看审核', '', () => {
-      document.querySelector('nav button[data-tab="review"]').click();
-    });
-    this.onDrawBackground = drawPreview;
-    this.size = [260, 260];
-  });
+  return spec || [];
 }
 
-/* ---------- 管线模板 ---------- */
-const TEMPLATES = {
-  transform: {
-    name: '对标视频转换',
-    build(g) {
-      const src = LGT.createNode('aimf/src_video');
-      const chr = LGT.createNode('aimf/character');
-      const eng = LGT.createNode('aimf/engine_vt');
-      const post = LGT.createNode('aimf/post');
-      const out = LGT.createNode('aimf/output');
-      [[src, 40, 60], [chr, 40, 330], [eng, 340, 160], [post, 660, 160], [out, 950, 160]]
-        .forEach(([n, x, y]) => { n.pos = [x, y]; g.add(n); });
-      src.connect(0, eng, 0); chr.connect(0, eng, 1);
-      eng.connect(0, post, 0); post.connect(0, out, 0);
-    },
-    submit() {
-      const src = nodeByType('aimf/src_video');
-      const chr = nodeByType('aimf/character');
-      const eng = nodeByType('aimf/engine_vt');
-      const post = nodeByType('aimf/post');
-      const out = nodeByType('aimf/output');
-      const source = w(src, '素材'), face = w(chr, '形象');
-      if (!source || source.startsWith('--')) throw new Error('请选择对标视频');
-      if (!face || face.startsWith('--')) throw new Error('请选择目标形象图');
-      return {
-        ep: '/api/jobs/video-transform',
-        body: {
-          source, face, prompt: w(eng, '背景提示词') || '',
-          mode: w(eng, '模式'), resolution: w(eng, '分辨率'),
-          pre_edit_prompt: w(chr, '换装/换发型') || null,
-          keep_audio: !!w(post, '保留原声/加音轨'),
-          bgm: w(post, 'BGM') === '无' ? null : w(post, 'BGM'),
-          title: w(out, '标题') || null,
-          tags: (w(out, '标签(,分隔)') || '').split(',').filter(Boolean),
-        },
-        nodes: [src, chr, eng, post, out],
-      };
-    },
-  },
+function addParamWidget(node, p) {
+  const kind = p.kind || 'text';
+  if (kind.startsWith('asset:')) {
+    const group = kind.slice(6);
+    const vals = ['--选择--'].concat(assetValues(group));
+    const cmb = node.addWidget('combo', p.name, p.default || vals[0], v => {
+      if (v && !v.startsWith('--')) attachPreview(node, mediaUrl(v), group === 'video');
+    }, { values: vals });
+    cmb._isParam = true; cmb._assetGroup = group;
+    node.addWidget('button', '↑上传' + ({ video: '视频', image: '图片', audio: '音频' })[group], '', () => {
+      upAsset(group === 'video' ? 'source' : group === 'audio' ? 'voice' : 'image',
+        path => { cmb.options.values.push(path); cmb.value = path; attachPreview(node, mediaUrl(path), group === 'video'); });
+    });
+  } else if (kind === 'combo' || kind.startsWith('@')) {
+    const vals = ['--'].concat(resolveOptions(p.options === undefined && kind.startsWith('@') ? kind : p.options, node));
+    const cmb = node.addWidget('combo', p.name, p.default || vals[0], v => {
+      if (p.name === '角色') {   // 角色变了刷新形象版本列表
+        const lw = (node.widgets || []).find(x => x._dyn === '@looks');
+        if (lw) { lw.options.values = resolveOptions('@looks', node); lw.value = lw.options.values[0]; }
+      }
+    }, { values: vals });
+    cmb._isParam = true;
+    if (kind.startsWith('@')) cmb._dyn = kind;
+    if (p.options === '@characters') cmb._dyn = '@characters';
+    if (p.options === '@looks') cmb._dyn = '@looks';
+  } else if (kind === 'toggle') {
+    const t = node.addWidget('toggle', p.name, !!p.default, () => { });
+    t._isParam = true;
+  } else if (kind === 'number') {
+    const nb = node.addWidget('number', p.name, p.default || 0, () => { }, { precision: 2 });
+    nb._isParam = true;
+  } else if (kind === 'textarea') {
+    const t = node.addWidget('text', p.name + (p.hint ? `(${p.hint})` : ''), p.default || '', () => { }, { multiline: true });
+    t._isParam = true;
+  } else {
+    const t = node.addWidget('text', p.name + (p.hint ? `(${p.hint})` : ''), p.default || '', () => { });
+    t._isParam = true;
+  }
+}
 
-  digital_human: {
-    name: '数字人口播',
-    build(g) {
-      const role = LGT.createNode('aimf/role');
-      const scr = LGT.createNode('aimf/script');
-      const eng = LGT.createNode('aimf/engine_dh');
-      const post = LGT.createNode('aimf/post');
-      const out = LGT.createNode('aimf/output');
-      [[role, 40, 60], [scr, 40, 330], [eng, 340, 160], [post, 640, 160], [out, 920, 160]]
-        .forEach(([n, x, y]) => { n.pos = [x, y]; g.add(n); });
-      role.connect(0, eng, 0); scr.connect(0, eng, 1);
-      eng.connect(0, post, 0); post.connect(0, out, 0);
-      // 后处理节点首项"保留原声"对数字人不适用 → 改标字幕
-      const pw = post.widgets.find(x => x.name === '保留原声/加音轨');
-      if (pw) pw.name = '字幕';
-      out.title = '输出 → 审核队列';
+/* ---------- 动态注册节点 ---------- */
+function buildNodeClass(def) {
+  function N() {
+    (def.inputs || []).forEach(([n, t]) => this.addInput(n.replace(/^\?/, '') + (n[0] === '?' ? '·可选' : ''), t === '*' ? 0 : t));
+    (def.outputs || []).forEach(([n, t]) => this.addOutput(n, t === '*' ? 0 : t));
+    (def.params || []).forEach(p => addParamWidget(this, p));
+    const base = 40 + (def.params || []).length * 26 + (def.inputs || []).length * 8;
+    this.size = [265, Math.max(base, 110)];
+    this._cat = def.category;
+    this.color = NODE_COLORS[def.category] || '#222';
+    // 素材节点加预览区
+    if (def.category === 'material' || def.type.startsWith('output/')) {
+      this.onDrawBackground = drawPreview;
+      this._imgTop = this.size[1] - 8;
+      this.size[1] += 150;
+      this._imgTop = base + 10;
+    }
+  }
+  N.title = def.title;
+  N.desc = def.type;
+  LGT.registerNodeType(def.type, N);
+}
+
+/* ---------- 添加节点菜单 ---------- */
+function showAddNodeMenu(ev) {
+  const entries = NODE_SCHEMA.map(d => ({
+    content: `${{ material: '素材', model: '模型', proc: '后处理', output: '输出' }[d.category]} / ${d.title}`,
+    value: d.type,
+    callback: (v, opt, e) => {
+      const n = LGT.createNode(v);
+      n.pos = lgcanvas.convertEventToCanvasOffset(ev);
+      lgraph.add(n);
     },
-    submit() {
-      const role = nodeByType('aimf/role');
-      const scr = nodeByType('aimf/script');
-      const eng = nodeByType('aimf/engine_dh');
-      const post = nodeByType('aimf/post');
-      const out = nodeByType('aimf/output');
-      const text = w(scr, '文案');
-      if (!text) throw new Error('请填写口播文案');
-      return {
-        ep: '/api/jobs/digital-human',
-        body: {
-          text, character: w(role, '角色'),
-          emotion: w(role, '情绪') === 'neutral' ? null : w(role, '情绪'),
-          prompt: w(role, '画面提示词') || null,
-          resolution: w(eng, '分辨率'),
-          subtitles: !!w(post, '字幕'),
-          title: w(scr, '标题') || w(out, '标题') || null,
-          tags: (w(scr, '标签(,分隔)') || w(out, '标签(,分隔)') || '').split(',').filter(Boolean),
-        },
-        nodes: [role, scr, eng, out],
-      };
-    },
+  }));
+  new LGT.ContextMenu(entries, { event: ev || window.event, title: '添加节点' }, window);
+}
+
+/* ---------- 图序列化/加载 ---------- */
+function collectGraph() {
+  return {
+    nodes: lgraph._nodes.map(n => ({
+      id: n.id, type: n.type, pos: [n.pos[0], n.pos[1]],
+      params: Object.fromEntries(
+        (n.widgets || []).filter(x => x._isParam).map(x => [x.name.split('(')[0], x.value])),
+    })),
+    links: Object.values(lgraph.links).map(l => ({
+      src: l.origin_id, src_slot: l.origin_slot,
+      dst: l.target_id, dst_slot: l.target_slot,
+    })),
+  };
+}
+
+function loadGraphJSON(g) {
+  lgraph.clear();
+  const idmap = {};
+  (g.nodes || []).forEach(n => {
+    const node = LGT.createNode(n.type);
+    if (!node) return;
+    node.pos = n.pos || [100, 100];
+    lgraph.add(node);
+    idmap[n.id] = node;
+    Object.entries(n.params || {}).forEach(([k, v]) => setW(node, k, v));
+  });
+  (g.links || []).forEach(l => {
+    const s = idmap[l.src], d = idmap[l.dst];
+    if (s && d) s.connect(l.src_slot, d, l.dst_slot);
+  });
+  lgcanvas.draw();
+}
+
+/* ---------- 内置模板 ---------- */
+const TEMPLATES = {
+  '内置·对标视频转换': () => {
+    const t = (ty, x, y) => { const n = LGT.createNode(ty); n.pos = [x, y]; lgraph.add(n); return n; };
+    const src = t('material/video', 40, 80);
+    const chr = t('material/character', 40, 460);
+    const eng = t('model/wan_animate', 400, 220);
+    const post = t('proc/bgm', 740, 220);
+    const out = t('output/review', 1040, 220);
+    const bgm = t('material/audio', 740, 480);
+    src.connect(0, eng, 0); chr.connect(0, eng, 1);
+    eng.connect(0, post, 0); bgm.connect(0, post, 1); post.connect(0, out, 0);
+  },
+  '内置·数字人口播': () => {
+    const t = (ty, x, y) => { const n = LGT.createNode(ty); n.pos = [x, y]; lgraph.add(n); return n; };
+    const role = t('material/character', 30, 60);
+    const scr = t('material/text', 30, 430);
+    const tts = t('model/tts_minimax', 350, 430);
+    const italk = t('model/infinitetalk', 350, 60);
+    const post = t('proc/subtitles', 700, 60);
+    const out = t('output/review', 1000, 60);
+    const scr2 = t('material/text', 700, 380);
+    role.connect(0, italk, 0); tts.connect(0, italk, 1); scr2.connect(0, italk, 2);
+    scr.connect(0, tts, 0); italk.connect(0, post, 0); scr.connect(0, post, 1);
+    post.connect(0, out, 0);
   },
 };
 
-/* ---------- 画布初始化与运行 ---------- */
-async function refreshCanvasLists() {
-  await refreshMeta();          // ASSETS / CHARS
-  const cur = TEMPLATES[$('#pipe-tpl').value];
-  initCanvas(cur);              // 重建画布刷新下拉(参数会重置)
+/* ---------- 上传回调 ---------- */
+function upAsset(kind, cb) {
+  const inp = document.createElement('input'); inp.type = 'file';
+  inp.onchange = async () => {
+    const f = inp.files[0]; if (!f) return;
+    const fd = new FormData(); fd.append('file', f);
+    const r = await fetch(`/api/upload?kind=${kind}&token=${TOKEN}`, { method: 'POST', body: fd }).then(r => r.json());
+    if (r.path) { toast('已上传 ' + r.path); cb && cb(r.path); }
+    else toast('失败: ' + (r.detail || ''));
+  }; inp.click();
 }
 
-function initCanvas(tpl) {
-  const el = document.getElementById('lgcanvas');
-  lgraph = new LGT.LGraph();
-  if (!lgcanvas) {
-    lgcanvas = new LGT.LGraphCanvas(el, lgraph);
-    lgcanvas.allow_reconnect_links = false;
-    lgcanvas.show_info = false;
-  } else {
-    lgcanvas.setGraph(lgraph);
-  }
-  el.width = el.parentElement.clientWidth - 4;
-  el.height = Math.max(560, window.innerHeight - 240);
-  tpl.build(lgraph);
-  lgcanvas.draw();
-  const st = document.getElementById('canvas-status');
-  if (st) st.textContent = `已加载: ${tpl.name} · ${lgraph._nodes.length} 个节点`;
-  window._lgraph = lgraph;
+/* ---------- 运行 ---------- */
+async function runPipeline() {
+  if (runningJob) { toast('有任务在运行中'); return; }
+  const g = collectGraph();
+  if (!g.nodes.length) { toast('空图'); return; }
+  const r = await api('/api/graph/run', 'POST', g);
+  if (r.detail) { toast('图校验失败: ' + r.detail); return; }
+  if (!r.queued) { toast('提交失败 ' + JSON.stringify(r)); return; }
+  runningJob = r.job;
+  lgraph._nodes.forEach(n => setNodeState(n, 'running'));
+  toast('任务已提交: ' + r.job);
+  pollJob(r.job);
 }
 
-function pollJob(jid, nodes) {
+function pollJob(jid) {
   const timer = setInterval(async () => {
     const j = await api('/api/jobs/' + jid);
+    const ns = (j.result || {}).node_status || {};
+    lgraph._nodes.forEach(n => { if (ns[n.id]) setNodeState(n, ns[n.id]); });
     if (j.status === 'running') return;
     clearInterval(timer);
     runningJob = null;
     if (j.status === 'done') {
-      nodes.forEach(n => setNodeState(n, 'ok'));
-      const item = j.result && j.result.item_id;
-      toast('生成完成，已进审核队列');
-      if (item) {
-        const out = nodeByType('aimf/output');
-        if (out) attachPreview(out, withToken('/media/' + item), true);
-      }
-      load && load('review');
+      toast('完成，产物已进审核队列');
+      const items = (j.result || {}).items || [];
+      lgraph._nodes.filter(n => n.type.startsWith('output/') && items.length)
+        .forEach((n, i) => attachPreview(n, withToken('/media/' + items[Math.min(i, items.length - 1)]), true));
+      const errs = (j.result || {}).errors || [];
+      if (errs.length) toast('部分节点失败: ' + errs[0].slice(0, 100));
     } else {
-      nodes.forEach(n => setNodeState(n, 'err'));
-      toast('失败: ' + ((j.result && j.result.error) || '').slice(0, 120));
+      toast('失败: ' + ((j.result && j.result.error) || '').slice(0, 150));
     }
   }, 4000);
 }
 
-async function runPipeline() {
-  if (runningJob) { toast('有任务在运行中'); return; }
-  const tpl = TEMPLATES[$('#pipe-tpl').value];
-  let req;
-  try { req = tpl.submit(); } catch (e) { toast(e.message); return; }
-  const r = await api(req.ep, 'POST', req.body);
-  if (!r.queued) { toast('提交失败: ' + JSON.stringify(r)); return; }
-  const jobs = await api('/api/jobs');
-  runningJob = jobs[0].id;
-  req.nodes.forEach(n => setNodeState(n, 'run'));
-  toast('任务已提交: ' + runningJob);
-  pollJob(runningJob, req.nodes);
+/* ---------- 保存/加载模板 ---------- */
+async function saveTemplate() {
+  const name = prompt('模板名称'); if (!name) return;
+  await api('/api/graphs', 'POST', { name, graph: collectGraph() });
+  toast('已保存模板 ' + name);
+  refreshTemplateList();
+}
+async function refreshTemplateList() {
+  const saved = await api('/api/graphs');
+  const sel = $('#pipe-tpl');
+  sel.innerHTML = Object.keys(TEMPLATES).map(k => `<option value="${k}">${k}</option>`).join('')
+    + saved.map(g => `<option value="saved:${g.name}">★ ${g.name}</option>`).join('');
+}
+async function loadSelected() {
+  const v = $('#pipe-tpl').value;
+  if (v.startsWith('saved:')) {
+    const g = await api('/api/graphs/' + v.slice(6));
+    lgraph.clear();
+    loadGraphJSON(g.graph || g);
+  } else {
+    lgraph.clear();
+    TEMPLATES[v]();
+  }
+  lgcanvas.draw();
+  const st = document.getElementById('canvas-status');
+  if (st) st.textContent = `已加载: ${v.replace('saved:', '')} · ${lgraph._nodes.length} 个节点`;
 }
 
 /* ---------- 挂载 ---------- */
 window.initNodeCanvas = async function () {
   if (!window.LiteGraph) { toast('画布库未加载'); return; }
   await refreshMeta();
-  registerNodes();
-  const sel = $('#pipe-tpl');
-  sel.innerHTML = Object.entries(TEMPLATES)
-    .map(([k, v]) => `<option value="${k}">${v.name}</option>`).join('');
-  sel.onchange = () => initCanvas(TEMPLATES[sel.value]);
-  initCanvas(TEMPLATES[sel.value]);
-  window._lgraph = lgraph;   // debug/测试钩子
-  window._canvasReady = true;
+  NODE_SCHEMA = await api('/api/nodes');
+  NODE_SCHEMA.forEach(buildNodeClass);
+  const el = document.getElementById('lgcanvas');
+  lgraph = new LGT.LGraph();
+  if (!lgcanvas) {
+    lgcanvas = new LGT.LGraphCanvas(el, lgraph);
+    lgcanvas.show_info = false;
+    el.width = el.parentElement.clientWidth - 4;
+    el.height = Math.max(560, window.innerHeight - 260);
+  } else {
+    lgcanvas.setGraph(lgraph);
+  }
+  await refreshTemplateList();
+  $('#pipe-tpl').onchange = loadSelected;
+  loadSelected();
 };
+
+window.runPipeline = runPipeline;
+window.saveTemplate = saveTemplate;
+window.showAddNodeMenu = showAddNodeMenu;
+window.refreshCanvasLists = async () => { await refreshMeta(); loadSelected(); };

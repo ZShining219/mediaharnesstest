@@ -10,7 +10,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import comfyui, config as C, mpt, publisher, scheduler, store
+from . import comfyui, config as C, mpt, nodegraph, nodedefs, publisher, scheduler, store
 
 app = FastAPI(title="AI 传媒工作流编排器")
 
@@ -372,6 +372,71 @@ def job_detail(jid: str):
         if j["id"] == jid:
             return j
     raise HTTPException(404)
+
+
+# ---------------- 节点画布 (graph engine) ----------------
+
+GRAPHS_DIR = C.DB_PATH.parent / "graphs"
+
+
+@app.get("/api/nodes")
+def node_schema():
+    """节点类型注册表, 前端据此动态生成画布节点"""
+    return nodedefs.schema()
+
+
+class GraphReq(BaseModel):
+    nodes: list[dict]                # [{id,type,pos,params}]
+    links: list[dict] = []           # [{src,src_slot,dst,dst_slot}]
+    name: str | None = None
+
+
+@app.post("/api/graph/run")
+def graph_run(req: GraphReq, bg: BackgroundTasks):
+    graph = {"nodes": req.nodes, "links": req.links}
+    try:
+        nodegraph.validate(graph)
+    except nodegraph.GraphError as e:
+        raise HTTPException(400, str(e))
+    jid = store.job_create("graph", {"nodes": len(req.nodes),
+                                     "name": req.name})
+    def _run():
+        try:
+            res = nodegraph.run(graph, jid)
+            store.job_finish(jid, "done", res)
+        except Exception as e:
+            store.job_finish(jid, "error", {"error": str(e)})
+    bg.add_task(_run)
+    return {"queued": True, "job": jid}
+
+
+@app.get("/api/graphs")
+def list_graphs():
+    GRAPHS_DIR.mkdir(parents=True, exist_ok=True)
+    return [{"name": f.stem, "mtime": f.stat().st_mtime}
+            for f in sorted(GRAPHS_DIR.glob("*.json"))]
+
+
+class GraphSaveReq(BaseModel):
+    name: str
+    graph: dict
+
+
+@app.post("/api/graphs")
+def save_graph(req: GraphSaveReq):
+    GRAPHS_DIR.mkdir(parents=True, exist_ok=True)
+    name = "".join(c for c in req.name if c not in '/\\..') or f"g{int(time.time())}"
+    (GRAPHS_DIR / f"{name}.json").write_text(
+        json.dumps(req.graph, ensure_ascii=False, indent=1), encoding="utf-8")
+    return {"saved": name}
+
+
+@app.get("/api/graphs/{name}")
+def load_graph(name: str):
+    f = GRAPHS_DIR / f"{name}.json"
+    if not f.exists():
+        raise HTTPException(404)
+    return json.loads(f.read_text(encoding="utf-8"))
 
 
 @app.get("/api/workflows/{name}/inspect")

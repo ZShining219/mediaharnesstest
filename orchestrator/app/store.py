@@ -40,6 +40,19 @@ def job_finish(jid: str, status: str, result: dict):
         )
 
 
+def job_update(jid: str, result: dict | None = None, status: str | None = None):
+    """运行中回写部分状态(节点进度等); 与 job_finish 并存"""
+    with _conn() as c:
+        row = c.execute("SELECT result FROM jobs WHERE id=?", (jid,)).fetchone()
+        merged = {**json.loads(row[0] or "{}"), **(result or {})}
+        if status:
+            c.execute("UPDATE jobs SET status=?, result=?, updated_at=? WHERE id=?",
+                      (status, json.dumps(merged, ensure_ascii=False), time.time(), jid))
+        else:
+            c.execute("UPDATE jobs SET result=?, updated_at=? WHERE id=?",
+                      (json.dumps(merged, ensure_ascii=False), time.time(), jid))
+
+
 def job_list(limit: int = 50) -> list[dict]:
     with _conn() as c:
         rows = c.execute(
