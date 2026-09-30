@@ -27,7 +27,7 @@ EXCLUDE = {".venv", "__pycache__", ".git", "outputs/tmp", "data/jobs.db",
 def make_tarball() -> Path:
     tmp = Path(tempfile.mkdtemp()) / "aimf.tar.gz"
     def keep(ti):
-        rel = ti.name
+        rel = ti.name.lstrip("./")  # arcname="." 会产生 "./xxx" 前缀
         if any(rel == e or rel.startswith(e + "/") for e in EXCLUDE):
             return None
         # 排除各服务虚拟环境与浏览器缓存
