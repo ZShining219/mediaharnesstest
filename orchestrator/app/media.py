@@ -58,8 +58,20 @@ def burn_subtitles(video: Path, srt: Path, out: Path):
     style = ("FontName=PingFang SC,FontSize=14,PrimaryColour=&H00FFFFFF,"
              "OutlineColour=&H00000000,Outline=1,Shadow=0,"
              "Alignment=2,MarginV=40")
-    _run("-i", str(video), "-vf", f"subtitles={srt}:force_style='{style}'",
-         "-c:a", "copy", str(out))
+    # ffmpeg 滤镜参数解析: 路径含空格/中文要用 filename='...' 形式,
+    # 且内部 ' \ : 需反斜杠转义
+    esc = str(srt.resolve()).replace("\\", "\\\\").replace("'", "\\'") \
+        .replace(":", "\\:")
+    try:
+        _run("-i", str(video), "-vf",
+             f"subtitles=filename='{esc}':force_style='{style}'",
+             "-c:a", "copy", str(out))
+    except RuntimeError as e:
+        if "No such filter" not in str(e):
+            raise
+        # ffmpeg 未编译 libass -> 退化为软字幕轨(可开关)
+        _run("-i", str(video), "-i", str(srt),
+             "-c:v", "copy", "-c:a", "copy", "-c:s", "mov_text", str(out))
 
 
 _PUNC = re.compile(r"[^。！？!?，,；;：:\s]+[。！？!?，,；;：:]?")

@@ -53,6 +53,16 @@ def job_update(jid: str, result: dict | None = None, status: str | None = None):
                       (json.dumps(merged, ensure_ascii=False), time.time(), jid))
 
 
+def job_mark_interrupted() -> int:
+    """启动时调用: 上次进程退出遗留的 running 任务标记为 interrupted"""
+    with _conn() as c:
+        cur = c.execute(
+            "UPDATE jobs SET status='interrupted', updated_at=? WHERE status='running'",
+            (time.time(),),
+        )
+        return cur.rowcount
+
+
 def job_list(limit: int = 50) -> list[dict]:
     with _conn() as c:
         rows = c.execute(
@@ -69,11 +79,13 @@ def job_list(limit: int = 50) -> list[dict]:
 # ---------------- review items ----------------
 
 def add_review_item(media: Path, pipeline: str, meta: dict) -> Path:
-    """把成品 + sidecar 元数据放入待审核队列"""
-    item_id = media.stem
+    """把成品 + sidecar 元数据放入待审核队列(同名自动加后缀防覆盖)"""
     dst = C.REVIEW_DIR / media.name
     if media.resolve() != dst.resolve():
+        if dst.exists():
+            dst = C.REVIEW_DIR / f"{media.stem}_{uuid.uuid4().hex[:6]}{media.suffix}"
         shutil.move(str(media), dst)
+    item_id = dst.stem
     meta = {"id": item_id, "pipeline": pipeline, "status": "pending",
             "created_at": time.time(), **meta}
     (C.REVIEW_DIR / f"{item_id}.json").write_text(

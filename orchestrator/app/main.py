@@ -30,6 +30,9 @@ async def token_guard(request, call_next):
 
 @app.on_event("startup")
 def _startup():
+    n = store.job_mark_interrupted()
+    if n:
+        print(f"[store] {n} 个遗留 running 任务标记为 interrupted")
     scheduler.start()
 
 
@@ -39,11 +42,22 @@ app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), na
 # ---------------- pages ----------------
 
 TPL = Path(__file__).parent / "templates"
+DIST = C.ROOT / "web" / "dist"
 
 
 @app.get("/", response_class=HTMLResponse)
 def index():
+    if (DIST / "index.html").exists():
+        return (DIST / "index.html").read_text(encoding="utf-8")
     return (TPL / "index.html").read_text(encoding="utf-8")
+
+
+@app.get("/legacy", response_class=HTMLResponse)
+def legacy_index():
+    return (TPL / "index.html").read_text(encoding="utf-8")
+
+
+
 
 
 @app.get("/api/config/public")
@@ -194,6 +208,10 @@ def health():
                       "url": "https://api.wavespeed.ai"},
         "minimax": {"configured": bool(C.MINIMAX_API_KEY),
                     "url": C.MINIMAX_BASE_URL},
+        "minimax_tts": {"configured": bool(C.env("MINIMAX_API_KEY_OFFICIAL") or C.MINIMAX_API_KEY),
+                        "url": C.env("MINIMAX_BASE_URL_OFFICIAL", "https://api.minimax.cn")},
+        "deepseek": {"configured": bool(C.env("LLM_API_KEY")),
+                     "url": C.env("LLM_BASE_URL", "https://api.deepseek.com")},
         "comfyui": {"url": C.COMFYUI_BASE_URL, "ok": comfyui.ComfyUI().health()},
         "mpt": {"url": C.MPT_BASE_URL, "ok": mpt.MPT().health()},
         "sau": {"installed": publisher.sau_available()},
@@ -380,6 +398,59 @@ def job_detail(jid: str):
     raise HTTPException(404)
 
 
+@app.get("/api/dashboard")
+def dashboard():
+    """首页汇总: 队列计数 + 最近任务 + 服务状态要点"""
+    jobs = store.job_list(100)
+    return {
+        "review": len(store.list_review()),
+        "approved": len(store.list_approved()),
+        "published": len(store._items_in(C.PUBLISHED_DIR)),
+        "failed": len(store._items_in(C.FAILED_DIR)),
+        "jobs_running": sum(1 for j in jobs if j["status"] == "running"),
+        "jobs_total": len(jobs),
+        "jobs_recent": jobs[:6],
+        "schedules": scheduler.list_jobs() if scheduler._scheduler else [],
+    }
+
+
+# ---------------- 定时任务 ----------------
+
+@app.get("/api/schedules")
+def schedules_list():
+    return scheduler.list_jobs()
+
+
+class SchedReq(BaseModel):
+    id: str | None = None
+    type: str                      # digital_human/video_transform/auto_content/publish_approved
+    cron: str                      # "分 时 日 月 周"
+    params: dict = {}
+
+
+@app.post("/api/schedules")
+def schedules_add(req: SchedReq):
+    try:
+        return scheduler.add_job(req.model_dump(exclude_none=True))
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@app.delete("/api/schedules/{job_id}")
+def schedules_del(job_id: str):
+    return scheduler.remove_job(job_id)
+
+
+@app.get("/api/outputs/{state}")
+def outputs_list(state: str):
+    """state: review/approved/published/failed"""
+    d = {"review": C.REVIEW_DIR, "approved": C.APPROVED_DIR,
+         "published": C.PUBLISHED_DIR, "failed": C.FAILED_DIR}.get(state)
+    if not d:
+        raise HTTPException(404)
+    return store._items_in(d)
+
+
 # ---------------- 节点画布 (graph engine) ----------------
 
 GRAPHS_DIR = C.DB_PATH.parent / "graphs"
@@ -451,3 +522,10 @@ def wf_inspect(name: str):
         return comfyui.inspect_workflow(name)
     except Exception as e:
         raise HTTPException(400, str(e))
+
+
+# ---------------- 前端静态托管(最后注册, 兜底) ----------------
+# vite 构建产物 web/dist: index.html 引用 /assets/*, 挂在根路径;
+# 路由均在其之前注册, /api /media /static 不受影响
+if DIST.exists():
+    app.mount("/", StaticFiles(directory=DIST, html=True), name="dist")

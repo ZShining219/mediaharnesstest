@@ -5,7 +5,6 @@
     refs/            原始参考照片(供换装/换发型出图用)
     looks/           各形象版本, 当前形象由 config.json 的 look 指定
 """
-import base64
 import json
 import time
 from pathlib import Path
@@ -85,14 +84,23 @@ def animate_comfyui(portrait: Path, audio: Path, prompt_text: str,
     return client.download(videos[0], dst)
 
 
-def animate_minimax(portrait: Path, prompt_text: str, jid: str) -> Path:
-    """MiniMax-H3 参考图生视频。注意: 该路径不保证精确口型, 适合氛围镜头;
-    严格口型请用 backend=comfyui (InfiniteTalk)"""
+def animate_minimax(portrait: Path, audio: Path | None, prompt_text: str,
+                    jid: str, duration: int | None = None) -> Path:
+    """MiniMax-H3 形象口播: 参考图 + (可选)参考音频 -> 视频。
+    秘塔代理接口; 音频参与生成时口型更好。"""
     mm = minimax.Minimax()
-    img_b64 = "data:image/png;base64," + base64.b64encode(portrait.read_bytes()).decode()
-    task = mm.video_generate(prompt=prompt_text, first_frame_image=img_b64)
-    fid = mm.video_wait(task)
-    return mm.file_download(fid, C.TMP_DIR / f"{jid}_raw.mp4")
+    content = [mm.part_text(prompt_text), mm.part_image(portrait)]
+    if audio:
+        content.append(mm.part_audio(audio))
+    if duration:
+        secs = duration
+    elif audio:
+        secs = min(15, max(4, round(media.ffprobe_duration(audio) or 6)))
+    else:
+        secs = 6
+    tid = mm.video_generate(content, duration=secs, resolution="768P")
+    mm.video_wait_download(tid, C.TMP_DIR / f"{jid}_raw.mp4")
+    return C.TMP_DIR / f"{jid}_raw.mp4"
 
 
 def run(text: str, character: str = "default", emotion: str | None = None,
@@ -119,14 +127,14 @@ def run(text: str, character: str = "default", emotion: str | None = None,
         speak_prompt = prompt or char_cfg.get("default_prompt") or \
             "一位主播自然地对着镜头说话，表情生动，画质清晰"
 
-        backend = cfg.get("backend", "wavespeed")
+        backend = cfg.get("backend", "minimax")
         if backend == "comfyui":
             raw = animate_comfyui(portrait, audio, speak_prompt,
                                   cfg.get("workflow", "digital_human_infinitetalk"), jid)
-        elif backend == "minimax":
-            raw = animate_minimax(portrait, speak_prompt, jid)
-        else:  # wavespeed (默认, 零部署)
+        elif backend == "wavespeed":
             raw = animate_wavespeed(portrait, audio, speak_prompt, jid, resolution)
+        else:  # minimax (默认, 秘塔代理零部署)
+            raw = animate_minimax(portrait, audio, speak_prompt, jid)
 
         final = raw
         # 若生成视频不含音轨, 合成 TTS 音频

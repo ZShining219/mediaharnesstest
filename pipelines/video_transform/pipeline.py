@@ -12,7 +12,7 @@
 """
 from pathlib import Path
 
-from orchestrator.app import comfyui, store
+from orchestrator.app import comfyui, media, store
 from orchestrator.app import config as C
 
 
@@ -36,6 +36,23 @@ def run_wavespeed(source: Path, character_img: Path, out: Path,
                                   resolution=resolution)
 
 
+def run_minimax(source: Path, character_img: Path, out: Path,
+                prompt: str = "", duration: int | None = None,
+                resolution: str = "768P") -> Path:
+    """MiniMax-H3 路径: 对标视频(reference_video)+人物形象图(reference_image)
+    -> 重新生成"人物被替换"的视频。秘塔代理计费 ~¥0.09/秒(输入+输出)。"""
+    from orchestrator.app import minimax
+    mm = minimax.Minimax()
+    secs = duration or min(15, max(4, round(media.ffprobe_duration(source))))
+    content = [mm.part_text(
+        prompt or "把参考视频中的人物替换为参考图片中的人物，保持动作、表情、"
+                   "口型、场景和运镜完全一致，人物五官、发型、着装与参考图一致"),
+        mm.part_video(source), mm.part_image(character_img)]
+    tid = mm.video_generate(content, duration=secs, resolution=resolution)
+    mm.video_wait_download(tid, out)
+    return out
+
+
 def run(source: Path, prompt: str = "", face: Path | None = None,
         cloth: Path | None = None, background: Path | None = None,
         mask: Path | None = None, workflow: str | None = None,
@@ -49,7 +66,13 @@ def run(source: Path, prompt: str = "", face: Path | None = None,
     workflow = workflow or cfg.get("workflow", "video_vace_transform")
     jid = jid or store.job_create("video_transform", {"source": str(source)})
     try:
-        if backend == "wavespeed":
+        if backend == "minimax":
+            if not face:
+                raise PipelineError("minimax 模式需要 face 目标形象图")
+            out = C.TMP_DIR / f"{jid}_swap.mp4"
+            run_minimax(source, face, out, prompt=prompt,
+                        resolution=resolution or cfg.get("resolution", "768P"))
+        elif backend == "wavespeed":
             out = _run_wavespeed_path(
                 jid, cfg, source, face, cloth, prompt, mode, pre_edit_prompt,
                 resolution or cfg.get("resolution", "720p"))
@@ -70,9 +93,11 @@ def run(source: Path, prompt: str = "", face: Path | None = None,
                 media.mix_bgm(out, bgm_path, mixed)
                 out = mixed
 
-        # 可选第二阶段: 脸部精修工作流 (如 ReActor/PuLID)
-        face_wf = cfg.get("face_detail_workflow")
+        # 可选第二阶段: 脸部精修工作流 (仅 comfyui 后端)
+        face_wf = cfg.get("face_detail_workflow") if backend == "comfyui" else None
         if face_wf:
+            client = comfyui.ComfyUI()
+            variables = {"FACE": client.upload(face) if face else ""}
             v_name = client.upload(out)
             wf2 = comfyui.apply_patches(
                 comfyui.load_workflow(face_wf),

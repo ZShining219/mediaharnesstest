@@ -1,75 +1,37 @@
-# ============================================================
-# 工作流编排配置: 复制为 config.yaml 后按需修改
-# ============================================================
-
-# ---------- 数字人默认参数 ----------
 digital_human:
-  # 动画后端:
-  #   "wavespeed" -> 托管 InfiniteTalk(推荐, 零部署, 口型精准, 按次计费)
-  #   "minimax"   -> MiniMax-H3 参考图生视频(零部署, 口型对齐弱, 适合氛围镜头)
-  #   "comfyui"   -> 自建 ComfyUI GPU 上的 InfiniteTalk 工作流(质量/成本可控)
-  backend: wavespeed
-  resolution: 720p
-  # ComfyUI 工作流模板名(orchestrator/workflows/ 下的文件名, 不含扩展名)
+  backend: minimax
   workflow: digital_human_infinitetalk
-  # TTS 引擎: "minimax"(云端, 推荐) / "indextts"(本地开源, 待接入)
   tts_engine: minimax
-  minimax_tts_model: speech-2.8-hd
-  # 默认情绪: happy/sad/angry/fear/disgust/surprise/neutral
+  minimax_tts_model: speech-2.6-hd
+  default_voice_id: female-shaonv
   default_emotion: neutral
-  # 生成后处理
   post:
     burn_subtitles: true
     loudnorm: true
-    bgm: ""              # assets/bgm/ 下的文件名, 空为不加
+    bgm: ''
     bgm_volume: 0.15
-
-# ---------- 视频换装/换脸/换背景 ----------
 video_transform:
-  # 后端:
-  #   "wavespeed" -> Wan2.2-Animate 托管 API(推荐, 零部署):
-  #                  整人替换(换脸+换衣=先编辑形象图再整人换入), animate2 可换背景
-  #   "comfyui"   -> 自建 GPU 上的 VACE 工作流(局部重绘, 更精细但需部署)
-  backend: wavespeed
-  resolution: 720p
-  # ComfyUI 工作流模板名(backend=comfyui 时生效): 用 Wan2.2-VACE(+Phantom) 的导出 JSON
+  backend: minimax
+  resolution: 768P
   workflow: video_vace_transform
-  # 脸部精修(可选, 第二阶段工作流, 如 ReActor/PuLID 换脸): 空为跳过
-  face_detail_workflow: ""
-
-# ---------- 自动化创作 ----------
+  face_detail_workflow: ''
 auto_content:
-  video_aspect: "9:16"          # 竖屏抖音
-  video_source: pexels          # pexels/pixabay/local, 或 MPT 支持的 AI 素材源
-  voice_name: ""                # MPT 内部音色, 空=其默认
+  backend: minimax_llm
+  video_aspect: '9:16'
+  video_source: pexels
+  voice_name: ''
   video_count: 1
   video_clip_duration: 5
-
-# ---------- 发布 ----------
 publish:
   default_platform: douyin
   default_account: main
-  # 审核通过后是否自动发布(false=只在审核页手动点发布)
   auto_after_approve: false
-  # 自动发布时的定时格式: "now"=立即, 或 "HH:MM"=每天固定时刻
-  auto_schedule: "now"
-
-# ---------- 定时任务 (cron: 分 时 日 月 周) ----------
+  auto_schedule: now
 schedules:
   enabled: true
   jobs:
-    # 示例: 每天早上 8 点批量生成数字人口播, 素材为 assets/scripts/today.txt
-    # - id: morning_dh
-    #   type: digital_human
-    #   cron: "0 8 * * *"
-    #   params:
-    #     character: default
-    #     text_file: assets/scripts/today.txt
-    #     emotion: neutral
-    #
-    # 示例: 每晚 21:00 把"已审核"队列里的作品发到抖音
-    - id: publish_approved
-      type: publish_approved
-      cron: "0 21 * * *"
-      params:
-        platform: douyin
+  - id: publish_approved
+    type: publish_approved
+    cron: 0 21 * * *
+    params:
+      platform: douyin

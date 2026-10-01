@@ -115,7 +115,7 @@ def n_material_character(ctx, ins, ps):
 
 @node("model/tts_minimax", "模型·MiniMax 情感TTS", "model",
       [("text", "text")], [("audio", "audio")],
-      [P("音色ID", "text", "", hint="留空用 .env MINIMAX_VOICE_ID 或系统音色"),
+      [P("音色ID", "text", "female-shaonv", hint="官方站系统音色/克隆音色ID"),
        P("情绪", "combo", "neutral",
         options=["neutral", "happy", "sad", "angry", "surprise", "fear", "disgust"]),
        P("语速", "number", 1.0)])
@@ -124,11 +124,44 @@ def n_tts(ctx, ins, ps):
     text = ins.get("text")
     if not text:
         raise NodeError("TTS 需要文本输入")
-    vid = ps.get("音色ID") or C.env("MINIMAX_VOICE_ID", "male-qn-qingse")
+    vid = ps.get("音色ID") or C.env("MINIMAX_VOICE_ID", "female-shaonv")
     out = ctx.tmp("tts", ".mp3")
     minimax.Minimax().tts(text, vid, out, emotion=ps.get("情绪"),
                           speed=float(ps.get("语速") or 1.0))
     return {"audio": out}
+
+
+@node("model/llm_deepseek", "模型·DeepSeek 文案", "model",
+      [("?text", "text")], [("text", "text")],
+      [P("任务", "combo", "prompt",
+         options=["prompt", "script", "custom"],
+         hint="prompt=视频提示词 / script=口播文案 / custom=自由指令"),
+       P("自由指令", "textarea", "", hint="custom 模式用; {input} 为上游文本占位"),
+       P("字数上限", "number", 120)])
+def n_llm(ctx, ins, ps):
+    from . import llm
+    task = ps.get("任务") or "prompt"
+    src = (ins.get("text") or "").strip()
+    limit = int(ps.get("字数上限") or 120)
+    if task == "prompt":
+        system = ("你是短视频导演。根据用户主题写一条视频生成提示词：描述画面主体、"
+                  "动作、场景、光线、镜头运动、风格。只输出提示词本身，中文，"
+                  f"不超过{limit}字。")
+        user = src or ps.get("自由指令") or ""
+    elif task == "script":
+        system = ("你是短视频编剧。根据主题写一段口播文案：口语化、有钩子、"
+                  f"不超过{limit}字。只输出文案本身。")
+        user = src or ps.get("自由指令") or ""
+    else:
+        tpl = ps.get("自由指令") or "{input}"
+        user = tpl.replace("{input}", src)
+        system = None
+    if not user:
+        raise NodeError("DeepSeek 节点需要上游文本或自由指令")
+    ctx.log("DeepSeek 生成中…")
+    text = llm.LLM().chat(user, system=system, max_tokens=max(256, limit * 4))
+    ctx.log(f"DeepSeek 产出 {len(text)} 字")
+    return {"text": text}
 
 
 @node("model/infinitetalk", "模型·InfiniteTalk 口播", "model",
@@ -179,21 +212,77 @@ def n_image_edit(ctx, ins, ps):
     return {"image": out}
 
 
-@node("model/minimax_h3", "模型·MiniMax H3 视频", "model",
+def _h3_run(ctx, content: list[dict], out: Path, ps: dict,
+            default_prompt: str, ins: dict) -> dict:
+    """H3 通用提交: content 多模态数组 -> 等结果 -> 下载"""
+    from . import minimax
+    prompt = (ins.get("text") or ins.get("prompt") or "").strip() or default_prompt
+    content.insert(0, minimax.Minimax.part_text(prompt))
+    mm = minimax.Minimax()
+    duration = max(4, min(15, int(ps.get("时长(秒)") or 6)))
+    resolution = ps.get("分辨率") or "768P"
+    ratio = ps.get("画幅") or None
+    tid = mm.video_generate(content, duration=duration,
+                            resolution=resolution, ratio=ratio)
+    ctx.log(f"H3 任务 {tid} ({resolution} {duration}s"
+            f"{' ratio=' + ratio if ratio else ''})")
+    task = mm.video_wait(tid)
+    usage = task.get("usage") or {}
+    ctx.log(f"H3 完成 usage={usage}")
+    mm.download(mm.video_url(task), out)
+    return {"video": out}
+
+
+@node("model/minimax_h3", "模型·MiniMax H3 文/图生视频", "model",
       [("text", "text"), ("?image", "image")], [("video", "video")],
-      [P("时长(秒)", "number", 6)])
+      [P("时长(秒)", "number", 6),
+       P("分辨率", "combo", "768P", options=["480p", "512p", "768P", "2K"]),
+       P("画幅", "combo", "9:16", options=["9:16", "16:9", "1:1", "adaptive"])])
 def n_h3(ctx, ins, ps):
     from . import minimax
-    if not ins.get("text"):
+    if not (ins.get("text") or "").strip():
         raise NodeError("H3 需要提示词文本")
-    out = ctx.tmp("h3", ".mp4")
-    mm = minimax.Minimax()
-    kwargs = {"duration": int(ps.get("时长(秒)") or 6)}
+    content = []
     if ins.get("image"):
-        kwargs["subject_reference"] = [file_data_uri(_p(ctx, ins["image"]))]
-    tid = mm.video_generate(ins["text"], **kwargs)
-    mm.file_download(mm.video_wait(tid), out)
-    return {"video": out}
+        content.append(minimax.Minimax.part_image(_p(ctx, ins["image"])))
+    return _h3_run(ctx, content, ctx.tmp("h3", ".mp4"), ps,
+                   "生成一段高质量视频", ins)
+
+
+@node("model/h3_faceswap", "模型·H3 人物替换(换脸)", "model",
+      [("video", "video"), ("image", "image"), ("?text", "text")],
+      [("video", "video")],
+      [P("时长(秒)", "number", 6),
+       P("分辨率", "combo", "768P", options=["480p", "512p", "768P", "2K"]),
+       P("画幅", "combo", "adaptive", options=["adaptive", "9:16", "16:9", "1:1"])])
+def n_h3_faceswap(ctx, ins, ps):
+    """对标视频(参考视频) + 人物形象图(参考图) -> 替换人物后的新视频"""
+    from . import minimax
+    content = [
+        minimax.Minimax.part_video(_p(ctx, ins["video"])),
+        minimax.Minimax.part_image(_p(ctx, ins["image"])),
+    ]
+    return _h3_run(ctx, content, ctx.tmp("swap", ".mp4"), ps,
+                   "把参考视频中的人物替换为参考图片中的人物，保持动作、表情、"
+                   "场景和运镜完全一致，人物五官与参考图一致", ins)
+
+
+@node("model/h3_avatar", "模型·H3 形象口播(图+声音)", "model",
+      [("image", "image"), ("audio", "audio"), ("?text", "text")],
+      [("video", "video")],
+      [P("时长(秒)", "number", 6),
+       P("分辨率", "combo", "768P", options=["480p", "512p", "768P", "2K"]),
+       P("画幅", "combo", "9:16", options=["9:16", "16:9", "1:1", "adaptive"])])
+def n_h3_avatar(ctx, ins, ps):
+    """人物形象图 + 参考音频(口播配音) -> 人物按音频说话的视频"""
+    from . import minimax
+    content = [
+        minimax.Minimax.part_image(_p(ctx, ins["image"])),
+        minimax.Minimax.part_audio(_p(ctx, ins["audio"])),
+    ]
+    return _h3_run(ctx, content, ctx.tmp("avatar", ".mp4"), ps,
+                   "图片中的人物对着镜头自然地朗读参考音频的台词，口型准确、"
+                   "表情生动、画质清晰", ins)
 
 
 # ==================== 后处理节点 ====================

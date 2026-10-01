@@ -1,7 +1,38 @@
 # 技术选型决策记录
 
-> 调研日期: 2026-09-30；v2 修订: 同日 (用户反馈 + 服务器环境确认)。
+> 调研日期: 2026-09-30；v2 修订: 同日 (用户反馈 + 服务器环境确认)；v3 修订: 2026-10-02 (前端重建 + MiniMax H3 主链路)。
 > 原则: 优先复用成熟开源工程，自建只做胶水层；产品要傻瓜式，推理走托管 API。
+
+## v3 架构修订 (2026-10-02)
+
+**前端重建**: 原单页 `index.html` + 手写 litegraph 画布 → **Vite + Vue 3 + Vue Flow + Element Plus**。
+构建产物 `web/dist/` 由 FastAPI 直接静态托管（`/api` `/media` `/static` 路由优先注册，SPA 挂根路径兜底，
+hash 路由无需服务端 rewrite）；旧版页面保留在 `/legacy`。
+
+**画布选型对比**:
+
+| 方案 | License | 维护 | 结论 |
+|---|---|---|---|
+| **Vue Flow** | MIT | 活跃(1.x, 2025 持续发布) | ✅ 选中: Vue3 原生、类型化 Handle、Minimap/Controls、自定义节点插槽，正好覆盖"节点编排+运行染色" |
+| React Flow | MIT | 活跃 | 生态更大但需 React 栈，与 Vue 技术栈二选一即可 |
+| LiteGraph 官方新版 | MIT | 维护一般 | 原方案，手写量最大、UI 老旧，放弃 |
+| n8n / Dify 画布 | Fair-code / Apache | 活跃 | 组件与其自家运行时耦合深，拆出复用成本高，放弃 |
+
+组件库选 **Element Plus**（Vue 生态最成熟的企业组件库），状态用轻量 reactive store，
+无 Pinia 依赖。
+
+**推理链路修订**: WaveSpeed key 本机未配置 → 主链路切换到 **MiniMax H3（秘塔 Metaso 代理）**：
+
+- 视频生成统一走秘塔代理新版多模态接口：`POST {base}/video_generation` + `content[]` 数组
+  （`text` / `video_url:reference_video` / `image_url:reference_image` / `audio_url:reference_audio`），
+  轮询 `GET {base}/query/video_generation/{task_id}`，取 `task.content.url`。
+- **秘塔只代理 video_generation**（`t2a_v2` 返回 404）→ TTS/声音克隆走官方站
+  `api.minimax.cn`（`MINIMAX_API_KEY_OFFICIAL`，注意官方站请求必须带 `GroupId` 查询参数，空值即可）。
+- 换脸链路实测：对标视频 + 形象参考图 → H3 人物替换，约 56s 出片，秘塔计费约 ¥0.09/秒(输入+输出秒)。
+- **DeepSeek** 接入做文案/画面提示词；其 API 偶发长时无响应 → 自动创作管线内置
+  模板文案降级，DeepSeek 挂了照样能产出（job 记录 `llm_fallback`）。
+- `minimax.py` 同时兼容两线路：`Minimax()` = 秘塔(视频)，`Minimax.official()` = 官方站(TTS/克隆)。
+- WaveSpeed/ComfyUI 保留为可选后端（config.yaml `backend` 一键切回），前端不变。
 
 ## v2 架构修订 (2026-09-30)
 

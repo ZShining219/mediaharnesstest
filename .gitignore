@@ -39,3 +39,8 @@ services/ComfyUI/user/
 # ---- misc ----
 .DS_Store
 logs/
+work/
+node_modules/
+web/node_modules/
+web/dist/
+outputs/saved/
