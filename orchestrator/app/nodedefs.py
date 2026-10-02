@@ -36,6 +36,7 @@ class NodeCtx:
     tmpdir: Path
     log: Callable[[str], None] = print
     items: list = field(default_factory=list)   # 收集到的审核条目
+    inputs: list = field(default_factory=list)  # 图的输入素材清单(素材节点)
 
     def tmp(self, name: str, suffix: str) -> Path:
         return self.tmpdir / f"{name}{suffix}"
@@ -351,7 +352,7 @@ def n_out_review(ctx, ins, ps):
         "title": ps.get("标题") or media_path.stem,
         "desc": ps.get("简介") or "",
         "tags": [t for t in (ps.get("标签(,分隔)") or "").split(",") if t],
-        "job": ctx.jid})
+        "job": ctx.jid, "inputs": ctx.inputs})
     ctx.items.append(item.stem)
     return {}
 

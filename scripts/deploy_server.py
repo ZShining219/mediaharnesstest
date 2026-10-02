@@ -21,6 +21,7 @@ REMOTE_DIR = "/opt/aimf"
 
 EXCLUDE = {".venv", "__pycache__", ".git", "outputs/tmp", "data/jobs.db",
            "services/ComfyUI", "services/MoneyPrinterTurbo",
+           "web/node_modules",       # 前端依赖不进包; dist 保留随镜像部署
            ".env", "config.yaml"}  # 服务器自己的配置, 不覆盖
 
 

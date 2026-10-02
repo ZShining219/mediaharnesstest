@@ -49,6 +49,31 @@ def topo_order(nodes: dict, links: list[dict]) -> list[str]:
     return order
 
 
+def graph_inputs(graph: dict) -> list[dict]:
+    """从图的素材节点提取「输入素材清单」, 供任务详情/审核页做前后对照"""
+    kind_map = {"material/video": "video", "material/image": "image",
+                "material/audio": "audio"}
+    out = []
+    for n in graph.get("nodes", []):
+        t = n.get("type")
+        if t not in nodedefs.REGISTRY:
+            continue
+        d = nodedefs.REGISTRY[t]
+        if d.category != "material":
+            continue
+        ps = n.get("params") or {}
+        if t == "material/text":
+            out.append({"label": d.title, "kind": "text",
+                        "text": (ps.get("内容") or "")[:400]})
+        elif t == "material/character":
+            out.append({"label": f"{d.title}·{ps.get('角色') or ''}",
+                        "kind": "image", "path": ps.get("形象版本")})
+        elif t in kind_map:
+            out.append({"label": d.title, "kind": kind_map[t],
+                        "path": ps.get("文件")})
+    return [i for i in out if i.get("path") or (i.get("text") or "").strip()]
+
+
 def validate(graph: dict) -> tuple[dict, list[dict]]:
     nodes = {str(n["id"]): n for n in graph.get("nodes", [])}
     links = graph.get("links", [])
@@ -98,6 +123,7 @@ def run(graph: dict, jid: str):
 
     ctx = nodedefs.NodeCtx(jid=jid, tmpdir=tmpdir,
                            log=lambda m: logs.append(f"[{time.strftime('%H:%M:%S')}] {m}"))
+    ctx.inputs = graph_inputs(graph)
 
     # 每条连线: (dst_node, dst_slot) -> (src_node, src_slot)
     in_map = {(str(l["dst"]), l["dst_slot"]): (str(l["src"]), l["src_slot"])

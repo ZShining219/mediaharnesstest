@@ -112,9 +112,20 @@ def run(subject: str, script: str = "", title: str | None = None,
         else:
             out = run_minimax_llm(subject, script, jid, cfg)
 
+        from orchestrator.app import equivgraph
+        inputs = [{"label": "主题", "kind": "text", "text": subject}]
+        if backend == "minimax_llm":
+            if script:
+                inputs.append({"label": "口播文案", "kind": "text",
+                               "text": script})
+            vp = C.TMP_DIR / f"{jid}_vo.mp3"
+            if vp.exists():
+                inputs.append({"label": "配音音频", "kind": "audio",
+                               "path": equivgraph._rel(vp)})
         item = store.add_review_item(out, "auto_content", {
             "title": title or subject[:20], "desc": desc or subject,
             "tags": tags or [], "backend": backend,
+            "job": jid, "inputs": inputs,
         })
         store.job_finish(jid, "done", {"item": str(item), "item_id": item.stem})
         return {"job": jid, "item": str(item)}

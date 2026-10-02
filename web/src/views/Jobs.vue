@@ -1,7 +1,11 @@
 <script setup>
-// 任务中心: 实时进度列表 + 详情抽屉(节点状态/日志/产物)
+// 任务中心: 实时进度列表 + 详情抽屉(输入素材/节点状态/日志/产物/执行图回放)
 import { ref, onMounted, onUnmounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { api, mediaUrl, fmtTime, jobTypeName, STATUS_TAG } from '../api'
+import InputList from '../components/InputList.vue'
+
+const router = useRouter()
 
 const jobs = ref([])
 const detail = ref(null)
@@ -25,6 +29,8 @@ async function open(j) {
 }
 
 function res(j) { return j.result || {} }
+function inputs(j) { return (j.params || {}).inputs || res(j).inputs || [] }
+function hasGraph(j) { return !!(j.params || {}).graph }
 function nodeList(j) { return Object.entries(res(j).node_status || {}) }
 function logs(j) { return res(j).logs || [] }
 function items(j) { return res(j).items || (res(j).item_id ? [res(j).item_id] : []) }
@@ -75,6 +81,16 @@ onUnmounted(() => clearInterval(timer))
           <span class="dim" style="margin-left:10px;font-size:12.5px">{{ jobTypeName(detail.type) }}</span>
           <span class="dim" style="margin-left:10px;font-size:12.5px">{{ fmtTime(detail.created_at) }}</span>
         </div>
+
+        <el-button v-if="hasGraph(detail)" size="small" type="primary" plain
+                   @click="router.push({ name: 'canvas', query: { job: detail.id } })">
+          查看对应图（只读回放）
+        </el-button>
+
+        <template v-if="inputs(detail).length">
+          <h4 style="margin:14px 0 8px">输入素材</h4>
+          <InputList :items="inputs(detail)" />
+        </template>
 
         <template v-if="nodeList(detail).length">
           <h4 style="margin:14px 0 8px">节点状态</h4>

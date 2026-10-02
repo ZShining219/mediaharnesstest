@@ -36,6 +36,7 @@ export const api = {
 }
 
 export const assetUrl = (p) => withToken('/api/assets/file?path=' + encodeURIComponent(p))
+export const fileUrl = (p) => withToken('/api/file?path=' + encodeURIComponent(p))
 export const mediaUrl = (id) => withToken('/media/' + id)
 
 export const fmtTime = (ts) => ts ? new Date(ts * 1000).toLocaleString('zh-CN', { hour12: false }) : '-'

@@ -1,9 +1,12 @@
 <script setup>
-// 审核队列: 预览 -> 通过(填标题/定时) / 打回; 二级页签看 待发布/已发布/已打回
+// 审核队列: 「输入素材 → 产出」对照式呈现 -> 通过(填标题/定时) / 打回
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { useRouter } from 'vue-router'
 import { api, mediaUrl, fmtTime } from '../api'
+import InputList from '../components/InputList.vue'
 
+const router = useRouter()
 const tab = ref('review')
 const lists = ref({ review: [], approved: [], published: [], failed: [] })
 const busy = ref('')
@@ -73,7 +76,7 @@ onMounted(load)
   <div class="page">
     <div class="page-head">
       <h2>审核队列</h2>
-      <span class="sub">生成的内容先进这里，人工验收后才发布</span>
+      <span class="sub">左边是输入素材，右边是产出 — 对照验收后才发布</span>
       <div class="sp" />
       <el-button size="small" @click="load">刷新</el-button>
     </div>
@@ -85,29 +88,47 @@ onMounted(load)
 
     <el-empty v-if="!lists[tab].length" :description="tab === 'review' ? '暂无待审核作品 — 到工作台生成' : '这里空空如也'" :image-size="70" />
 
-    <div v-for="it in lists[tab]" :key="it.id" class="aimf-card"
-         style="display:flex;gap:20px;flex-wrap:wrap">
-      <video v-if="it.is_video" :src="mediaUrl(it.id)" controls class="media-video"
-             style="width:300px;max-height:340px" />
-      <img v-else :src="mediaUrl(it.id)" style="width:300px;object-fit:contain;border-radius:10px" />
-      <div style="flex:1;min-width:280px">
-        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-          <b>{{ it.title || it.id }}</b>
-          <el-tag size="small" effect="plain">{{ it.pipeline || 'graph' }}</el-tag>
-          <span class="dim" style="font-size:12px">{{ fmtTime(it.created_at) }}</span>
+    <div v-for="it in lists[tab]" :key="it.id" class="aimf-card">
+      <div class="cmp">
+        <!-- 左: 输入素材 -->
+        <div class="cmp-side">
+          <div class="cmp-cap">输入素材</div>
+          <InputList :items="it.inputs || []" />
         </div>
-        <div v-if="it.desc" class="dim" style="font-size:12.5px;margin-top:6px">{{ it.desc }}</div>
-        <div class="tag-list" style="margin-top:8px">
-          <el-tag v-for="t in it.tags || []" :key="t" size="small" effect="plain" type="info">{{ t }}</el-tag>
-        </div>
-        <div class="dim mono" style="font-size:11.5px;margin-top:8px">{{ it.file }}</div>
-        <div style="margin-top:14px">
-          <template v-if="tab === 'review'">
-            <el-button type="success" @click="approve(it)">通过</el-button>
-            <el-button type="danger" plain @click="reject(it)">打回</el-button>
-          </template>
-          <el-button v-if="tab === 'approved'" type="primary" :loading="busy === it.id"
-                     @click="publish(it)">发布到抖音</el-button>
+        <div class="cmp-arrow">→</div>
+
+        <!-- 右: 产出 -->
+        <div class="cmp-main">
+          <div style="flex-shrink:0">
+            <div class="cmp-cap">产出</div>
+            <video v-if="it.is_video" :src="mediaUrl(it.id)" controls class="media-video"
+                   style="width:300px;max-height:340px" />
+            <img v-else :src="mediaUrl(it.id)" style="width:300px;object-fit:contain;border-radius:10px" />
+          </div>
+          <div style="flex:1;min-width:240px">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+              <b>{{ it.title || it.id }}</b>
+              <el-tag size="small" effect="plain">{{ it.pipeline || 'graph' }}</el-tag>
+              <span class="dim" style="font-size:12px">{{ fmtTime(it.created_at) }}</span>
+            </div>
+            <div v-if="it.desc" class="dim" style="font-size:12.5px;margin-top:6px">{{ it.desc }}</div>
+            <div class="tag-list" style="margin-top:8px">
+              <el-tag v-for="t in it.tags || []" :key="t" size="small" effect="plain" type="info">{{ t }}</el-tag>
+            </div>
+            <div class="dim mono" style="font-size:11.5px;margin-top:8px">{{ it.file }}</div>
+            <div v-if="it.job" class="dim" style="font-size:11.5px;margin-top:2px">
+              任务 <el-link type="primary" style="font-size:11.5px"
+                     @click="router.push({ name: 'canvas', query: { job: it.job } })">{{ it.job }} · 查看执行图</el-link>
+            </div>
+            <div style="margin-top:14px">
+              <template v-if="tab === 'review'">
+                <el-button type="success" @click="approve(it)">通过</el-button>
+                <el-button type="danger" plain @click="reject(it)">打回</el-button>
+              </template>
+              <el-button v-if="tab === 'approved'" type="primary" :loading="busy === it.id"
+                         @click="publish(it)">发布到抖音</el-button>
+            </div>
+          </div>
         </div>
       </div>
     </div>

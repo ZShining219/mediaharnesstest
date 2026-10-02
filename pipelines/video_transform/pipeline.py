@@ -113,9 +113,19 @@ def run(source: Path, prompt: str = "", face: Path | None = None,
                 client.download(vids2[0], out2)
                 out = out2
 
+        from orchestrator.app import equivgraph
+        inputs = [
+            {"label": "对标视频", "kind": "video", "path": equivgraph._rel(source)},
+        ]
+        if face:
+            inputs.append({"label": "目标形象图", "kind": "image",
+                           "path": equivgraph._rel(face)})
+        if prompt:
+            inputs.append({"label": "提示词", "kind": "text", "text": prompt})
         item = store.add_review_item(out, "video_transform", {
             "title": title or source.stem, "desc": desc, "tags": tags or [],
             "source": source.name, "prompt": prompt, "mode": mode,
+            "job": jid, "inputs": inputs,
         })
         store.job_finish(jid, "done", {"item": str(item), "item_id": item.stem})
         return {"job": jid, "item": str(item)}

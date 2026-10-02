@@ -159,10 +159,21 @@ def run(text: str, character: str = "default", emotion: str | None = None,
             media.burn_subtitles(final, srt, out)
             final = out
 
+        from orchestrator.app import equivgraph
+        inputs = [
+            {"label": "口播文案", "kind": "text", "text": text},
+            {"label": "角色形象", "kind": "image",
+             "path": equivgraph._rel(portrait)},
+            {"label": "TTS 配音", "kind": "audio",
+             "path": equivgraph._rel(audio)},
+            {"label": "角色/音色", "kind": "text",
+             "text": f"{character} · {voice_id}"},
+        ]
         item = store.add_review_item(final, "digital_human", {
             "title": title or text[:20],
             "desc": desc, "tags": tags or [],
             "character": character, "backend": backend,
+            "job": jid, "inputs": inputs,
         })
         store.job_finish(jid, "done", {"item": str(item), "item_id": item.stem})
         return {"job": jid, "item": str(item)}

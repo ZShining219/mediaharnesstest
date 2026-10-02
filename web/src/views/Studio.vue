@@ -20,6 +20,13 @@ const ac = ref({ subject: '', script: '', title: '' })
 
 const emotions = ['neutral', 'happy', 'sad', 'angry', 'surprise', 'fear', 'disgust']
 
+// 每张卡背后对应一条节点链(与节点画布的等效执行图一致)
+const CARD_STEPS = {
+  dh: ['口播文案', 'MiniMax TTS 配音', 'H3 形象口播(图+声音→视频)', '合成音轨 · 烧字幕', '审核队列'],
+  vt: ['对标视频 + 形象图', 'H3 人物替换', '回填原视频音轨', '审核队列'],
+  ac: ['主题', 'DeepSeek 口播文案', 'MiniMax TTS 配音', 'DeepSeek 画面提示词', 'H3 文生视频', '合成音轨', '审核队列'],
+}
+
 async function submit(kind) {
   submitting.value = true
   try {
@@ -88,7 +95,7 @@ onMounted(async () => {
   <div class="page">
     <div class="page-head">
       <h2>工作台</h2>
-      <span class="sub">选一张卡，填两项，点生成 — 产物自动进审核队列</span>
+      <span class="sub">固定流程卡 · 照流程填表即跑（想自己编排节点请去「节点画布」）</span>
       <div class="sp" />
       <template v-if="dash">
         <el-tag type="warning" effect="plain">待审核 {{ dash.review }}</el-tag>
@@ -170,6 +177,14 @@ onMounted(async () => {
           </div>
         </el-form-item>
       </el-form>
+      <div class="steps-sum">
+        <div class="cap">本次将执行</div>
+        <div class="step-line">
+          <template v-for="(s, i) in CARD_STEPS.dh" :key="s">
+            <span v-if="i" class="ar">→</span><span class="st">{{ s }}</span>
+          </template>
+        </div>
+      </div>
       <template #footer>
         <el-button @click="dlg=''">取消</el-button>
         <el-button type="primary" :loading="submitting" @click="submit('dh')">生成口播视频</el-button>
@@ -214,6 +229,14 @@ onMounted(async () => {
           </el-radio-group>
         </el-form-item>
       </el-form>
+      <div class="steps-sum">
+        <div class="cap">本次将执行</div>
+        <div class="step-line">
+          <template v-for="(s, i) in CARD_STEPS.vt" :key="s">
+            <span v-if="i" class="ar">→</span><span class="st">{{ s }}</span>
+          </template>
+        </div>
+      </div>
       <template #footer>
         <el-button @click="dlg=''">取消</el-button>
         <el-button type="primary" :loading="submitting" @click="submit('vt')">开始转换</el-button>
@@ -232,8 +255,15 @@ onMounted(async () => {
         <el-form-item label="标题">
           <el-input v-model="ac.title" placeholder="可空" />
         </el-form-item>
-        <div class="dim" style="font-size:12px">链路：DeepSeek 写文案 → MiniMax 配音 → H3 生成画面 → 合成 → 审核队列</div>
       </el-form>
+      <div class="steps-sum">
+        <div class="cap">本次将执行</div>
+        <div class="step-line">
+          <template v-for="(s, i) in CARD_STEPS.ac" :key="s">
+            <span v-if="i" class="ar">→</span><span class="st">{{ s }}</span>
+          </template>
+        </div>
+      </div>
       <template #footer>
         <el-button @click="dlg=''">取消</el-button>
         <el-button type="primary" :loading="submitting" @click="submit('ac')">生成视频</el-button>

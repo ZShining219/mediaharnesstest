@@ -10,7 +10,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import comfyui, config as C, mpt, nodegraph, nodedefs, publisher, scheduler, store
+from . import comfyui, config as C, equivgraph, mpt, nodegraph, nodedefs, publisher, scheduler, store
 
 app = FastAPI(title="AI 传媒工作流编排器")
 
@@ -123,6 +123,19 @@ def asset_file(path: str):
     p = (C.ROOT / path).resolve()
     if not str(p).startswith(str(C.ASSETS.resolve())) or not p.is_file():
         raise HTTPException(403)
+    return FileResponse(p)
+
+
+@app.get("/api/file")
+def any_file(path: str):
+    """任务输入/中间产物预览: 限 assets/ 与 outputs/ 目录内的文件"""
+    p = Path(path)
+    if not p.is_absolute():
+        p = C.ROOT / p
+    p = p.resolve()
+    roots = (C.ASSETS.resolve(), C.OUTPUTS.resolve())
+    if not any(p.is_relative_to(r) for r in roots) or not p.is_file():
+        raise HTTPException(404)
     return FileResponse(p)
 
 
@@ -347,7 +360,17 @@ def _bg(bg: BackgroundTasks, fn, *a, **kw):
 @app.post("/api/jobs/digital-human")
 def job_dh(req: DHReq, bg: BackgroundTasks):
     from pipelines.digital_human import pipeline
-    jid = store.job_create("digital_human", req.model_dump())
+    params = req.model_dump()
+    try:  # 等效执行图 + 输入清单(供任务详情回放/对照), 失败不阻塞提交
+        from pipelines.digital_human.pipeline import character_dir, load_character
+        look = req.look or load_character(req.character).get("look", "looks/default.png")
+        look_path = f"assets/characters/{req.character}/{look}"
+        voice = load_character(req.character).get("voice_id")
+        params["graph"], params["inputs"] = equivgraph.digital_human(
+            req.text, req.character, look_path, voice, req.emotion, req.title)
+    except Exception:
+        pass
+    jid = store.job_create("digital_human", params)
     return _bg(bg, lambda: _run_guarded(
         jid, pipeline.run, req.text, character=req.character,
         emotion=req.emotion, look=req.look, prompt=req.prompt,
@@ -358,7 +381,13 @@ def job_dh(req: DHReq, bg: BackgroundTasks):
 @app.post("/api/jobs/video-transform")
 def job_vt(req: VTReq, bg: BackgroundTasks):
     from pipelines.video_transform import pipeline
-    jid = store.job_create("video_transform", req.model_dump())
+    params = req.model_dump()
+    try:
+        params["graph"], params["inputs"] = equivgraph.video_transform(
+            _resolve(req.source), _resolve(req.face), req.prompt, req.title)
+    except Exception:
+        pass
+    jid = store.job_create("video_transform", params)
     return _bg(bg, lambda: _run_guarded(
         jid, pipeline.run, _resolve(req.source), prompt=req.prompt,
         face=_resolve(req.face), cloth=_resolve(req.cloth),
@@ -372,7 +401,13 @@ def job_vt(req: VTReq, bg: BackgroundTasks):
 @app.post("/api/jobs/auto-content")
 def job_ac(req: ACReq, bg: BackgroundTasks):
     from pipelines.auto_content import pipeline
-    jid = store.job_create("auto_content", req.model_dump())
+    params = req.model_dump()
+    try:
+        params["graph"], params["inputs"] = equivgraph.auto_content(
+            req.subject, req.script, req.title)
+    except Exception:
+        pass
+    jid = store.job_create("auto_content", params)
     return _bg(bg, lambda: _run_guarded(
         jid, pipeline.run, req.subject, script=req.script,
         title=req.title, desc=req.desc, tags=req.tags, jid=jid))
@@ -475,8 +510,9 @@ def graph_run(req: GraphReq, bg: BackgroundTasks):
         nodegraph.validate(graph)
     except nodegraph.GraphError as e:
         raise HTTPException(400, str(e))
-    jid = store.job_create("graph", {"nodes": len(req.nodes),
-                                     "name": req.name})
+    jid = store.job_create("graph", {
+        "nodes": len(req.nodes), "name": req.name,
+        "graph": graph, "inputs": nodegraph.graph_inputs(graph)})
     def _run():
         try:
             res = nodegraph.run(graph, jid)

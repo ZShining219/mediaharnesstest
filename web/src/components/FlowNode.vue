@@ -78,13 +78,13 @@ function pickUpload(p) {
     </div>
     <div class="fn-io">
       <div v-for="p in inPorts" :key="p.id" class="fn-port">
-        {{ p.name }}<span v-if="p.optional" class="t">(可选)</span>
+        {{ p.name }}<span v-if="p.optional" class="t">(可选)</span><span class="dt" :style="{ color: portColor(p.dtype) }">{{ p.dtype }}</span>
         <Handle type="target" :id="p.id" :position="Position.Left"
                 :class="`dt-${p.dtype === '*' ? 'any' : p.dtype}`"
                 :style="{ background: portColor(p.dtype) }" />
       </div>
       <div v-for="p in outPorts" :key="p.id" class="fn-port out">
-        {{ p.name }}
+        {{ p.name }}<span class="dt" :style="{ color: portColor(p.dtype) }">{{ p.dtype }}</span>
         <Handle type="source" :id="p.id" :position="Position.Right"
                 :class="`dt-${p.dtype === '*' ? 'any' : p.dtype}`"
                 :style="{ background: portColor(p.dtype) }" />
