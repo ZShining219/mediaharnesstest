@@ -1,0 +1,35 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "plans-index.v1.schema.json",
+  "title": "Plans Index v1",
+  "type": "object",
+  "required": ["schema_version", "generated_at", "total", "items"],
+  "properties": {
+    "schema_version": {"const": "plans-index/v1"},
+    "generated_at": {"type": "integer"},
+    "total": {"type": "integer", "minimum": 0},
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["plan_id", "file", "owner"],
+        "properties": {
+          "plan_id": {"type": "string", "pattern": "^pvplan-"},
+          "title": {"type": "string"},
+          "file": {"type": "string"},
+          "created_at": {"type": "integer"},
+          "duration": {"type": ["number", "null"]},
+          "generation_mode": {"type": ["string", "null"]},
+          "run_id": {"type": ["string", "null"]},
+          "run_path": {"type": ["string", "null"]},
+          "review_item": {"type": ["string", "null"]},
+          "review_title": {"type": ["string", "null"]},
+          "jobs": {"type": "integer", "minimum": 0},
+          "job_statuses": {"type": "array", "items": {"type": "string"}},
+          "owner": {"enum": ["fission_run", "review_item", "job_history",
+                              "unlinked"]}
+        }
+      }
+    }
+  }
+}

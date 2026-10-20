@@ -20,6 +20,7 @@ ROOT = Path(__file__).resolve().parents[1]
 REMOTE_DIR = "/opt/aimf"
 
 EXCLUDE = {".venv", "__pycache__", ".git", "outputs/tmp", "data/jobs.db",
+           "models",                 # whisper 等模型缓存不进部署包
            "services/ComfyUI", "services/MoneyPrinterTurbo",
            "web/node_modules",       # 前端依赖不进包; dist 保留随镜像部署
            ".env", "config.yaml"}  # 服务器自己的配置, 不覆盖

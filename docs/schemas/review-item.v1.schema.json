@@ -1,0 +1,46 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "review-item.v1.schema.json",
+  "title": "Review Item Sidecar v1",
+  "type": "object",
+  "required": ["id", "pipeline", "status", "created_at"],
+  "properties": {
+    "id": {"type": "string"},
+    "pipeline": {"type": "string"},
+    "status": {"enum": ["pending", "approved", "published", "failed"]},
+    "created_at": {"type": "number"},
+    "title": {"type": "string"},
+    "desc": {"type": "string"},
+    "plan_id": {"type": ["string", "null"]},
+    "slice_id": {"type": "string"},
+    "generation_mode": {"type": "string"},
+    "prompt": {"type": "string"},
+    "constraints": {"type": "object"},
+    "inputs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["label", "kind"],
+        "properties": {
+          "label": {"type": "string"},
+          "kind": {"enum": ["image", "video", "text", "audio", "file"]},
+          "path": {"type": "string"},
+          "text": {"type": "string"}
+        }
+      }
+    },
+    "shots": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "index": {"type": "integer"},
+          "duration": {"type": "number"},
+          "shot_function": {"type": "string"},
+          "prompt": {"type": "string"},
+          "product_evidence": {"type": "array", "items": {"type": "string"}}
+        }
+      }
+    }
+  }
+}

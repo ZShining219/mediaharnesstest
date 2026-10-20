@@ -1,0 +1,32 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "export-manifest.v1.schema.json",
+  "title": "Fission Export Manifest v1",
+  "type": "object",
+  "required": ["run_id", "run_dir", "export_dir", "items"],
+  "properties": {
+    "run_id": {"type": "string", "pattern": "^fission-"},
+    "run_dir": {"type": "string"},
+    "export_dir": {"type": "string"},
+    "created_at": {"type": "integer"},
+    "query": {"type": "string"},
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["index", "name", "plan_id", "video", "verdict"],
+        "properties": {
+          "index": {"type": "integer", "minimum": 1},
+          "name": {"type": "string"},
+          "plan_id": {"type": "string"},
+          "video": {"type": "string"},
+          "verdict": {"type": "string"},
+          "identity": {"type": "number"},
+          "color": {"type": "number"},
+          "detail": {"type": "number"},
+          "issues": {"type": "array", "items": {"type": "string"}}
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "fission-slices-index.v1.schema.json",
+  "title": "Fission Slices Index v1",
+  "type": "object",
+  "required": ["schema_version", "generated_at", "total", "items"],
+  "properties": {
+    "schema_version": {"const": "fission-slices-index/v1"},
+    "generated_at": {"type": "integer"},
+    "total": {"type": "integer", "minimum": 0},
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["slice_id", "ref_id", "contract", "run_status"],
+        "properties": {
+          "slice_id": {"type": "string"},
+          "ref_id": {"type": "string"},
+          "direction": {"type": "string"},
+          "duration": {"type": ["number", "null"]},
+          "validation_ok": {"type": ["boolean", "null"]},
+          "contract": {"type": "string"},
+          "prompt": {"type": ["string", "null"]},
+          "video": {"type": ["string", "null"]},
+          "review": {"type": ["string", "null"]},
+          "run_status": {"type": "string"},
+          "created_at": {"type": "integer"}
+        }
+      }
+    }
+  }
+}

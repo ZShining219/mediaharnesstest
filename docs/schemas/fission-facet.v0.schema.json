@@ -1,0 +1,135 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "fission-facet.v0.schema.json",
+  "title": "Fission Facet v0",
+  "type": "object",
+  "required": [
+    "schema_version", "ref_id", "meta", "structure", "timeline",
+    "style", "scene", "product", "text", "slots", "provenance"
+  ],
+  "properties": {
+    "schema_version": {"const": "fission-facets/v0"},
+    "ref_id": {"type": "string", "pattern": "^ref-"},
+    "meta": {
+      "type": "object",
+      "required": ["title", "category_key", "duration", "shot_count", "beat_count"],
+      "properties": {
+        "title": {"type": "string"},
+        "category": {"type": "string"},
+        "category_key": {"type": "string"},
+        "tags": {"type": "array", "items": {"type": "string"}},
+        "duration": {"type": ["number", "null"]},
+        "source_url": {"type": "string"},
+        "video": {"type": "string"},
+        "shot_count": {"type": "integer", "minimum": 0},
+        "beat_count": {"type": "integer", "minimum": 0}
+      }
+    },
+    "structure": {
+      "type": "object",
+      "required": ["hook", "beat_order", "beats", "beat_shot_alignment"],
+      "properties": {
+        "hook": {"type": "string"},
+        "beat_order": {"type": "array", "items": {"type": "string"}},
+        "beats": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["index", "text", "alignment"],
+            "properties": {
+              "index": {"type": "integer", "minimum": 1},
+              "text": {"type": "string"},
+              "time": {"type": ["array", "null"], "items": {"type": "number"}},
+              "shot_index": {"type": ["integer", "null"]},
+              "shot_indices": {"type": "array", "items": {"type": "integer"}},
+              "alignment": {"type": "string"},
+              "confidence": {"type": "number"},
+              "evidence": {"type": "string"},
+              "reason": {"type": "string"}
+            }
+          }
+        },
+        "proof": {"type": "string"},
+        "cta": {"type": "string"},
+        "beat_shot_alignment": {
+          "type": "object",
+          "required": ["method", "confidence", "pairs"],
+          "properties": {
+            "method": {"enum": ["none", "index_by_count", "time_overlap", "llm_monotonic"]},
+            "confidence": {"type": "string"},
+            "overall_confidence": {"type": ["number", "null"]},
+            "pairs": {"type": "array", "items": {"type": "object"}},
+            "unmatched_beats": {"type": "array", "items": {"type": "object"}},
+            "unmatched_shots": {"type": "array", "items": {"type": "object"}},
+            "note": {"type": "string"},
+            "model": {"type": "string"},
+            "prompt_version": {"type": "string"},
+            "generated_at": {"type": "integer"}
+          }
+        }
+      }
+    },
+    "timeline": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "index", "time", "duration", "shot_size", "angle", "camera",
+          "lighting", "composition", "subject", "action", "product",
+          "product_visibility", "on_screen_text", "transition",
+          "confidence", "blueprint_prompt"
+        ],
+        "properties": {
+          "index": {"type": "integer", "minimum": 1},
+          "time": {"type": "array", "minItems": 2, "maxItems": 2,
+                    "items": {"type": "number"}},
+          "duration": {"type": "number", "minimum": 0},
+          "shot_size": {"type": "string"},
+          "angle": {"type": "string"},
+          "camera": {"type": "string"},
+          "lighting": {"type": "string"},
+          "color": {"type": "string"},
+          "composition": {"type": "string"},
+          "subject": {"type": "string"},
+          "action": {"type": "string"},
+          "product": {"type": "string"},
+          "product_visibility": {"type": "string"},
+          "on_screen_text": {"type": "string"},
+          "transition": {"type": "string"},
+          "confidence": {"type": "number"},
+          "blueprint_prompt": {"type": "string"}
+        }
+      }
+    },
+    "style": {"type": "object"},
+    "scene": {"type": "object"},
+    "product": {"type": "object"},
+    "text": {"type": "object"},
+    "roles": {"type": "object"},
+    "compliance": {"type": "object"},
+    "slots": {
+      "type": "object",
+      "required": ["invariants", "variables", "hard_constraints",
+                    "soft_constraints", "negative", "reference_role_map"],
+      "properties": {
+        "invariants": {"type": "array", "items": {"type": "string"}},
+        "variables": {"type": "array", "items": {"type": "string"}},
+        "hard_constraints": {"type": "array", "items": {"type": "string"}},
+        "soft_constraints": {"type": "array", "items": {"type": "string"}},
+        "negative": {"type": "array", "items": {"type": "string"}},
+        "reference_role_map": {"type": "object"}
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "required": ["descriptions", "source_sha256", "generated_at"],
+      "properties": {
+        "descriptions": {"type": "string"},
+        "blueprint": {"type": "string"},
+        "evidence": {"type": "string"},
+        "source_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "generated_at": {"type": "integer"}
+      }
+    }
+  }
+}

@@ -13,6 +13,9 @@ __pycache__/
 # ---- vendored open-source services (clone via scripts/setup.sh) ----
 services/
 
+# ---- model caches ----
+models/
+
 # ---- runtime data ----
 outputs/review/*
 outputs/approved/*

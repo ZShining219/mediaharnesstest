@@ -1,0 +1,58 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "reference-alignment.v1.schema.json",
+  "title": "Reference Beat Alignment v1",
+  "type": "object",
+  "required": [
+    "ref_id", "model", "prompt_version", "generated_at",
+    "source_sha256", "alignments", "unmatched_beats", "unmatched_shots",
+    "overall_confidence"
+  ],
+  "properties": {
+    "ref_id": {"type": "string", "pattern": "^ref-"},
+    "model": {"type": "string"},
+    "prompt_version": {"type": "string"},
+    "generated_at": {"type": "integer"},
+    "source_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "overall_confidence": {"type": "number", "minimum": 0, "maximum": 1},
+    "summary": {"type": "string"},
+    "alignments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["beat_index", "shot_indices", "confidence", "evidence"],
+        "properties": {
+          "beat_index": {"type": "integer", "minimum": 1},
+          "shot_indices": {
+            "type": "array", "minItems": 1,
+            "items": {"type": "integer", "minimum": 1}
+          },
+          "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+          "evidence": {"type": "string"}
+        }
+      }
+    },
+    "unmatched_beats": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["beat_index", "reason"],
+        "properties": {
+          "beat_index": {"type": "integer", "minimum": 1},
+          "reason": {"type": "string"}
+        }
+      }
+    },
+    "unmatched_shots": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["shot_index", "reason"],
+        "properties": {
+          "shot_index": {"type": "integer", "minimum": 1},
+          "reason": {"type": "string"}
+        }
+      }
+    }
+  }
+}

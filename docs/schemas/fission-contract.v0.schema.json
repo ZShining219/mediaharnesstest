@@ -1,0 +1,146 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "fission-contract.v0.schema.json",
+  "title": "Fission Contract v0",
+  "type": "object",
+  "required": [
+    "schema_version", "slice_id", "target", "structure",
+    "global", "facet_coverage", "provenance"
+  ],
+  "properties": {
+    "schema_version": {"const": "fission-contract/v0"},
+    "slice_id": {"type": "string", "pattern": "^slice-"},
+    "target": {
+      "type": "object",
+      "required": ["ref_id", "product", "format"],
+      "properties": {
+        "ref_id": {"type": "string", "pattern": "^ref-"},
+        "product": {
+          "type": "object",
+          "required": ["symbol", "identity", "must_show", "must_not_change"],
+          "properties": {
+            "symbol": {"type": "string"},
+            "identity": {"type": "string"},
+            "description": {"type": "string"},
+            "image": {"type": "string"},
+            "reference_policy": {"type": "string"},
+            "must_show": {"type": "array", "items": {"type": "string"}},
+            "must_not_change": {"type": "array", "items": {"type": "string"}},
+            "wear_state": {"type": "string"},
+            "matching": {"type": "string"}
+          }
+        },
+        "format": {
+          "type": "object",
+          "required": ["duration", "aspect_ratio"],
+          "properties": {
+            "duration": {"type": "number", "minimum": 4, "maximum": 15},
+            "aspect_ratio": {"type": "string"},
+            "resolution": {"type": "string"},
+            "pacing": {"type": "string"},
+            "voiceover": {"type": "boolean"},
+            "subtitles": {"type": "boolean"}
+          }
+        }
+      }
+    },
+    "structure": {
+      "type": "object",
+      "required": ["name", "concept", "hook", "beats"],
+      "properties": {
+        "name": {"type": "string"},
+        "concept": {"type": "string"},
+        "hook": {
+          "type": "object",
+          "required": ["time", "description"],
+          "properties": {
+            "time": {"type": "array", "minItems": 2, "maxItems": 2,
+                      "items": {"type": "number"}},
+            "description": {"type": "string"}
+          }
+        },
+        "beats": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": [
+              "index", "function", "function_label", "time", "duration",
+              "shot_size", "angle", "camera", "lighting", "composition",
+              "action", "product_evidence", "transition", "source"
+            ],
+            "properties": {
+              "index": {"type": "integer", "minimum": 1},
+              "function": {"type": "string"},
+              "function_label": {"type": "string"},
+              "time": {"type": "array", "minItems": 2, "maxItems": 2,
+                        "items": {"type": "number"}},
+              "duration": {"type": "number", "exclusiveMinimum": 0},
+              "shot_size": {"type": "string"},
+              "angle": {"type": "string"},
+              "camera": {"type": "string"},
+              "lighting": {"type": "string"},
+              "composition": {"type": "string"},
+              "action": {"type": "string"},
+              "product_evidence": {
+                "type": "array", "minItems": 1,
+                "items": {"type": "string"}
+              },
+              "on_screen_text": {"type": "string"},
+              "transition": {"type": "string"},
+              "source": {
+                "type": "object",
+                "required": ["ref_id", "beat_indices", "shot_indices", "fields_used"],
+                "properties": {
+                  "ref_id": {"type": "string", "pattern": "^ref-"},
+                  "beat_indices": {
+                    "type": "array", "minItems": 1,
+                    "items": {"type": "integer", "minimum": 1}
+                  },
+                  "shot_indices": {
+                    "type": "array", "minItems": 1,
+                    "items": {"type": "integer", "minimum": 1}
+                  },
+                  "fields_used": {
+                    "type": "array", "minItems": 1,
+                    "items": {"type": "string"}
+                  },
+                  "overrides": {"type": "array", "items": {"type": "string"}},
+                  "note": {"type": "string"}
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "global": {"type": "object"},
+    "negative": {"type": "array", "items": {"type": "string"}},
+    "facet_coverage": {
+      "type": "object",
+      "required": ["used", "adapted", "waived"],
+      "properties": {
+        "used": {"type": "array", "items": {"type": "object"}},
+        "adapted": {"type": "array", "items": {"type": "object"}},
+        "waived": {"type": "array", "items": {"type": "object"}}
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "required": ["facet", "alignment"],
+      "properties": {
+        "facet": {"type": "string"},
+        "alignment": {"type": "string"},
+        "direction_source": {"type": "string"}
+      }
+    },
+    "_validation": {
+      "type": "object",
+      "properties": {
+        "ok": {"type": "boolean"},
+        "errors": {"type": "array", "items": {"type": "string"}},
+        "warnings": {"type": "array", "items": {"type": "string"}}
+      }
+    }
+  }
+}
