@@ -526,12 +526,17 @@ def _extract_frames(video: Path, out_dir: Path, n: int = 4) -> list[Path]:
 
 
 def validate_output(video: Path, product_image: Path, out_dir: Path,
-                    idx: int) -> dict:
+                    idx: int, extra_images: list[Path] | None = None) -> dict:
     frames = _extract_frames(video, out_dir / f"validation_{idx:02d}")
     if not frames:
         return {"index": idx, "ok": False, "error": "没有抽到校验帧"}
-    prompt = f"""图1是商品参考图（只关注文胸本身，忽略图中的手、背景、文字）。
-图2-{len(frames) + 1}是生成视频的帧。请判断生成视频是否保持商品身份与硬约束。
+    refs = [product_image] + [p for p in (extra_images or []) if p.exists()]
+    ref_n = len(refs)
+    extra_line = ("图2-{}是商品背面/内里参考图。".format(ref_n)
+                  if ref_n > 1 else "没有额外商品视角图。")
+    prompt = f"""图1是商品正面参考图（只关注文胸本身，忽略图中的手、背景、文字）。
+{extra_line}
+图{ref_n + 1}-{ref_n + len(frames)}是生成视频的帧。请判断生成视频是否保持商品身份与硬约束。
 只输出 JSON：
 {{"product_present": true, "identity_match": 0, "color_match": 0,
  "detail_match": 0, "product_visibility": "full|partial|none",
@@ -541,7 +546,7 @@ def validate_output(video: Path, product_image: Path, out_dir: Path,
 detail_match 看蝴蝶结/包边/四排扣。商品不出现或严重变形直接 fail。"""
     try:
         txt = llm.LLM(model=C.env("REFERENCE_LLM_MODEL", "deepseek-chat"), timeout=180).chat_vision(
-            prompt, [product_image] + frames, max_tokens=2500,
+            prompt, refs + frames, max_tokens=2500,
             temperature=0.1, json_mode=True)
         data = extract_json(txt) or {"raw": txt[:1000]}
     except Exception as e:
@@ -554,7 +559,7 @@ detail_match 看蝴蝶结/包边/四排扣。商品不出现或严重变形直�
 
 
 def run_full(ref_id: str, product_time: float = 8.0,
-             person: str = "assets/persons/1792312878_1.png",
+             person: str = "assets/persons/半身照.png",
              n: int = 5, bgm: str | None = None,
              dry_run: bool = False, no_generate: bool = False,
              progress_cb=None) -> dict:

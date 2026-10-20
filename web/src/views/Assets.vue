@@ -5,11 +5,15 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { UploadFilled, Plus } from '@element-plus/icons-vue'
 import { api, assetUrl } from '../api'
 import { store, refreshMeta } from '../store'
+import { useFileDrop } from '../composables/useFileDrop'
 
 const KINDS = [
   { key: 'source', label: '对标视频', icon: '📹', accept: 'video/*' },
   { key: 'image', label: '参考图', icon: '🖼️', accept: 'image/*' },
   { key: 'garment', label: '服装图', icon: '👗', accept: 'image/*' },
+  { key: 'person', label: '人物照片', icon: '🧑', accept: 'image/*' },
+  { key: 'product', label: '商品图', icon: '📦', accept: 'image/*' },
+  { key: 'background', label: '背景图', icon: '🏙️', accept: 'image/*' },
   { key: 'voice', label: '声音样本', icon: '🎙️', accept: 'audio/*' },
   { key: 'bgm', label: '背景音乐', icon: '🎵', accept: 'audio/*' },
 ]
@@ -47,18 +51,41 @@ async function createChar() {
   ElMessage.success('已创建角色 ' + value)
   await refreshMeta(true)
 }
-async function uploadLook(c) {
-  const inp = document.createElement('input')
-  inp.type = 'file'; inp.accept = 'image/*'
-  inp.onchange = async () => {
-    const f = inp.files[0]; if (!f) return
+async function uploadLookFile(c, f) {
+  if (!c || !f) return
+  try {
     const r = await api.upload(f, 'look', `&character=${c.name}`)
     ElMessage.success('已上传 ' + r.path)
     // 自动设为当前形象
     await api.post(`/api/characters/${c.name}/config`, { look: 'looks/' + r.name })
     await refreshMeta(true)
+  } catch (e) { ElMessage.error('上传失败: ' + e.message) }
+}
+
+function uploadLook(c) {
+  const inp = document.createElement('input')
+  inp.type = 'file'; inp.accept = 'image/*'
+  inp.onchange = () => {
+    const f = inp.files?.[0]
+    inp.value = ''
+    uploadLookFile(c, f)
   }
   inp.click()
+}
+
+const lookTarget = ref(null)
+const { dragging: lookDragging, dropProps: lookDropBase } = useFileDrop({
+  accept: ['image/*'],
+  multiple: false,
+  onFiles: files => uploadLookFile(lookTarget.value, files?.[0]),
+})
+function lookDropProps(c) {
+  return {
+    dragenter: (ev) => { lookTarget.value = c; lookDropBase.dragenter(ev) },
+    dragover: lookDropBase.dragover,
+    dragleave: lookDropBase.dragleave,
+    drop: lookDropBase.drop,
+  }
 }
 async function cloneVoice(c) {
   const vs = store.assets.voice || []
@@ -98,6 +125,8 @@ onMounted(() => refreshMeta())
       <h3>角色管理 <el-button size="small" :icon="Plus" @click="createChar">新建角色</el-button></h3>
       <div style="display:flex;gap:14px;flex-wrap:wrap">
         <div v-for="c in store.characters" :key="c.name" class="aimf-card"
+             v-on="lookDropProps(c)"
+             :class="{ 'drop-active': lookDragging && lookTarget?.name === c.name }"
              style="padding:14px;display:flex;gap:12px;min-width:320px">
           <img v-if="c.has_look" :src="assetUrl(`assets/characters/${c.name}/${c.look}`)"
                style="width:88px;height:88px;object-fit:cover;border-radius:10px" />
@@ -116,7 +145,9 @@ onMounted(() => refreshMeta())
                 </el-select>
               </template>
             </div>
-            <el-button size="small" @click="uploadLook(c)">上传形象图</el-button>
+            <el-button size="small" @click="uploadLook(c)">
+              {{ lookDragging && lookTarget?.name === c.name ? '松开上传形象' : '上传形象图 / 可拖入' }}
+            </el-button>
             <el-button size="small" @click="cloneVoice(c)">克隆声音</el-button>
           </div>
         </div>

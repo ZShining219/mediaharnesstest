@@ -11,7 +11,8 @@
 - 29 条参考池 ↔ 29 个案例目录 ↔ 29 份 facet，全部一致；
 - 29 份 facet 的 `source_sha256` 与 `descriptions.json` 全部一致；
 - 导出目录完整（1 个 run，5 条视频），审核队列 29 对媒体/sidecar 全部配对；
-- **Phase 0/1/2 已执行**：检查器 **PASS=42 / WARN=0 / FAIL=0**。
+- **Phase 0/1/2 + P0 链路重构已执行**：检查器 **PASS=47 / WARN=1 / FAIL=0**（唯一告警：审核队列体积）。
+- 新链路已收进 `pipelines/fission/`，商品配置在 `configs/products/`，回归测试在 `tests/`。
 
 首轮 9 条告警全部清掉，另外完成了 Phase 2：
 
@@ -70,6 +71,9 @@ models/whisper/  模型缓存（已迁出 data/，git/deploy 排除）
 | `data/material_pool.json` | L1 | 自动采集 | 备料/选品 | 可重采 | 可清理 |
 | `data/directions.json` | L1 | 人工/UI | 编排 | 否 | 永久 |
 | `data/prompt_templates.json` | L1 | UI/手工 | 生成 | 否 | 永久 |
+| `configs/products/` | L1 | 人工/产品配置 | 裂变链路 | 否 | 永久 |
+| `configs/concepts/` | L1 | 人工/研发 | CreativeWorld proposer | 否 | 永久 |
+| `data/worlds/registry.jsonl` | L5 | 历史遗留（P0.2 不再读写） | — | 可清空 | 可归档 |
 | `data/catalog/` | L1 | 采集/选品脚本 | 选品/复盘 | 可重采 | 可归档 |
 | `data/reference_cases/{ref_id}/` | L2 | `reference_analysis` | facet/检索/UI | 是（重跑描述） | 随池 |
 | `data/reference_facets/` | L3 | `scripts/reference_facets.py` | 契约/检索 | 是 | 随案例 |
@@ -80,10 +84,13 @@ models/whisper/  模型缓存（已迁出 data/，git/deploy 排除）
 | `data/plans/` | L4 | `product_video.plan` | 生成管线/UI | 是 | 可归档 |
 | `data/plans/plan_index.json` | L3 | `scripts/build_indexes.py` | UI/检查器 | 是 | 随 plan |
 | `data/reference_runs/{run_id}/` | L5 | `reference_fission.run_full()` | 导出/UI | 部分 | 永久（运行记录） |
+| `data/runs/{run_id}/` | L5 | `pipelines/fission/p0_runner.py` | 新链路/审计 | 部分 | 永久（含 run.json） |
 | `outputs/review/` | L6 | `store.add_review_item()` | UI/审核 | 否（成品） | 30 天或转 approved/failed |
 | `outputs/fission/{run_id}/` | L7 | 导出步骤 | 交付/复盘 | 可从 run 重建 | 永久（交付快照） |
 | `outputs/tmp/` | 运维 | 生成管线 | 临时 | 是 | 7 天 |
 | `models/whisper/` | 运维 | faster-whisper | 描述 | 是（可重下） | 缓存；git/deploy 排除 |
+| `pipelines/fission/` | 代码 | 研发 | 链路编排 | — | 随版本 |
+| `tests/` | 代码 | 研发/CI | 回归 | — | 随版本 |
 
 ## 3. 关键产物契约
 
@@ -134,7 +141,7 @@ models/whisper/  模型缓存（已迁出 data/，git/deploy 排除）
 
 | 检查 | 结果 |
 |---|---|
-| 目录 | 21/21 必需目录存在（含 `data/catalog`） |
+| 目录 | 25/25 必需目录存在（含 `configs/products`、`pipelines/fission`、`tests`） |
 | 池 ↔ 案例 | 29/29 一致，无缺失/孤儿 |
 | 案例 ↔ facet | 29/29 一致 |
 | facet 溯源 | 29/29 `source_sha256` 与源描述一致 |
@@ -167,7 +174,8 @@ models/whisper/  模型缓存（已迁出 data/，git/deploy 排除）
 
 ### 5.3 剩余告警
 
-无。`scripts/check_layout.py --strict` 退出码 0。
+- `review.size`：审核队列 53 个媒体 / 363 MB，超过检查阈值；这是已生成裂变视频，不是结构错误。
+- `scripts/check_layout.py --strict` 当前仍可运行，结构检查无 FAIL。
 
 ### 5.4 生命周期 dry-run
 

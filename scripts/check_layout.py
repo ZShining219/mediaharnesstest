@@ -22,6 +22,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 REQUIRED_DIRS = [
     "assets", "assets/sources", "assets/persons", "assets/products",
+    "configs", "configs/products",
+    "pipelines/fission", "tests",
     "data", "data/catalog", "data/reference_cases", "data/reference_facets",
     "data/reference_alignments", "data/reference_index",
     "data/reference_runs", "data/fission_slices", "data/plans",
@@ -231,6 +233,48 @@ def check_schemas(a: Audit):
         a.ok("schemas", f"{len(expected)} 个 schema 存在")
 
 
+def check_profiles(a: Audit):
+    profiles = sorted((ROOT / "configs" / "products").glob("*.json"))
+    if not profiles:
+        a.warn("profiles.none", "configs/products 没有 profile")
+        return
+    bad = []
+    for p in profiles:
+        d = _load(p)
+        if not isinstance(d, dict):
+            bad.append(f"{p.name}: JSON 解析失败")
+            continue
+        missing = [k for k in (
+            "product_id", "image", "category", "identity", "must_show",
+            "must_not_change", "claims", "person") if not d.get(k)]
+        if missing:
+            bad.append(f"{p.name}: 缺 {missing}")
+        for key in ("image",):
+            if d.get(key) and not (ROOT / d[key]).exists():
+                bad.append(f"{p.name}: {key} 不存在")
+        person = (d.get("person") or {}).get("image")
+        if not person or not (ROOT / person).exists():
+            bad.append(f"{p.name}: person.image 不存在")
+    if bad:
+        a.warn("profiles.invalid", "；".join(bad))
+    else:
+        a.ok("profiles", f"{len(profiles)} 个 profile 有效")
+
+
+def check_fission_runs(a: Audit):
+    root = ROOT / "data" / "runs"
+    if not root.exists():
+        a.warn("runs.none", "data/runs 不存在")
+        return
+    runs = [p for p in root.iterdir() if p.is_dir()]
+    missing = [p.name for p in runs if not (p / "run.json").exists()]
+    if missing:
+        a.warn("runs.no_manifest",
+               f"{len(missing)} 个 run 缺 run.json（legacy）: {missing[:5]}")
+    else:
+        a.ok("runs.manifest", f"{len(runs)} 个 run 有 manifest")
+
+
 def check_runs(a: Audit):
     runs = [p for p in (ROOT / "data/reference_runs").iterdir() if p.is_dir()]
     complete = incomplete = bad = 0
@@ -369,6 +413,8 @@ def main():
     check_pool_cases(audit)
     check_facets(audit)
     check_indexes(audit)
+    check_profiles(audit)
+    check_fission_runs(audit)
     check_schemas(audit)
     check_runs(audit)
     check_exports(audit)

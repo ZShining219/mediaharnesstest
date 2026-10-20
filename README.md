@@ -18,6 +18,7 @@
       ├─ 任务中心:  实时进度 + 失败原因 + 结果定位
       ├─ 素材库:    分桶管理(对标视频/参考图/服装/声音/BGM) + 拖拽上传 + 角色管理
       ├─ 审核队列:  预览 → 通过(填标题/定时)/打回
+      ├─ 成果展示:  全部产出作品墙(审核中/待发布/已发布/已打回) + 筛选/搜索/详情/下载
       ├─ 发布:      social-auto-upload → 抖音(扫码登录,cookie持久化)
       └─ 定时任务:  cron 定时生成/定点发布, 运行时可增删(写回 config.yaml)
 
@@ -41,7 +42,7 @@ npm run dev                 # 开发模式(可选): vite dev server, 前端热�
 ```
 
 后端启动后 `/` 即新工作台；旧版 litegraph 页保留在 `/legacy`。
-路由: `/#/` 工作台 `/#/canvas` 画布 `/#/jobs` 任务 `/#/review` 审核 `/#/assets` 素材 `/#/schedules` 定时 `/#/status` 状态。
+路由: `/#/` 工作台 `/#/transform` 视频转换(独立功能页) `/#/product-video` 带货视频(视觉编导型, 无口播) `/#/canvas` 画布 `/#/jobs` 任务 `/#/review` 审核 `/#/gallery` 成果展示 `/#/assets` 素材 `/#/schedules` 定时 `/#/status` 状态。
 
 ## 节点画布（工作流引擎）
 
@@ -58,10 +59,60 @@ npm run dev                 # 开发模式(可选): vite dev server, 前端热�
 | 数字人口播 | 选角色 + 粘文案 + 选情绪 → 生成 | MiniMax TTS(官方站) → H3 形象+音频生视频 → 字幕/BGM/响度 |
 | 视频转换(换脸) | 上传对标视频 + 选形象图 → 转换 | MiniMax-H3 `reference_video`+`reference_image` → 整人替换、动作场景保留 |
 | 自动创作 | 填主题 → 生成 | DeepSeek 写文案+画面提示词 → MiniMax TTS → H3 文生视频 → 合成音轨 |
+| 带货视频（B 线） | 固定人物照片 + 本期商品图 + 意图 → 编导方案 → 确认生成 | DeepSeek 生成视觉编导 DirectorPlan → 逐镜 H3（无参考视频、无口播）→ 拼接/BGM → 审核 |
+
+### 带货视频（B 线：视觉编导型，无口播）
+
+- 输入：意图文本 + 固定人物照片（1–5 张）+ 本期商品图（2–6 张）+ 可选背景图
+- 流程：DeepSeek 生成视觉编导方案（DirectorPlan：视觉概念/分镜/运镜/光线/逐镜提示词）→ 前端确认/编辑 → 逐镜 H3 生成 → 拼接/BGM → 审核队列
+- 原则：不提交参考视频；不做口播；人物照片长期复用，商品图每条换
+- API：`POST /api/product-video/plan`、`PUT /api/product-video/plan/{id}`、`POST /api/product-video/plan/{id}/compile`、`POST /api/jobs/product-video`
+- 方案文件：`data/plans/*.json`；素材桶：`assets/persons`、`assets/products`、`assets/backgrounds`
+
+### 参考视频池 → 提示词逆向 → 裂变（PRE）
+
+- 定位：参考视频池是**案例库**，不是规则库；描述尽量全，归纳/泛化在下游
+- Encoder：PySceneDetect 切镜 + 关键帧 + faster-whisper ASR + DeepSeek 多图视觉
+  → 全局/逐镜 + 9 角色视角 + H3 蓝图
+- Retriever/Generalizer：BM25 facet 检索 + LLM 归纳约束模板
+- Decoder：约束模板 → DirectorPlan → H3 5 条裂变素材 → 商品硬约束校验
+- 产物：`data/reference_cases/*`、`data/reference_index/`、`data/reference_runs/*`、
+  `outputs/fission/*`
+- 前端（历史 PRE 入口）：`/#/fission` 裂变素材页；当前默认引擎已切到 P0.2，
+  见下一节
+- API：`GET /api/reference-cases`、`GET /api/reference-runs`、
+  `POST /api/jobs/reference-fission`
+- 文档：[docs/reference-prompt-reverse.md](docs/reference-prompt-reverse.md)
+- 命令：
+  ```bash
+  PYTHONPATH=. .venv/bin/python scripts/reference_describe.py
+  PYTHONPATH=. .venv/bin/python scripts/reference_fission.py --n 5
+  ```
+
+### P0.2 创意裂变 job（当前主链路）
+
+参考池先被拆成 StyleAtlas；商品 Profile 提供 ProductAnchor；CreativeWorld 负责创意装置，
+最后由 Composer 编译契约和 H3 prompt。
+
+- 一个后端 job 串起：素材解读 → anchor → style → world → contract → audit → H3 → 审核
+- API：`POST /api/jobs/fission-p0`
+- 前端：`/#/fission` 默认 P0.2 引擎；可只生成契约，也可生成视频
+- 产物：`data/runs/p0-*/vNN/{contract.json,prompt_h3.txt,variant_NN.mp4}`
+- 文档：[docs/fission-p0-architecture.md](docs/fission-p0-architecture.md)
+- Harness：[docs/fission-harness.md](docs/fission-harness.md)（稳定输入/输出与移植边界）
+
+```bash
+curl -s -X POST http://127.0.0.1:8800/api/jobs/fission-p0 \
+  -H 'Content-Type: application/json' \
+  -d '{"profile_id":"panty-cotton-lace","n":5,"seed":42}'
+```
 
 命令行同样可用：`python -m pipelines.digital_human.pipeline --text "..." --character default` 等。
 
 ## 本地启动
+
+最简单：Finder 里双击 `启动工作台.command`（已运行则直接打开页面），
+停止用 `停止工作台.command`。或终端执行：
 
 ```bash
 # 1. 后端 (FastAPI, 端口 8800)
@@ -79,9 +130,11 @@ cd web && npm install && npm run build && cd ..
 | 变量 | 用途 | 必填 |
 |---|---|---|
 | `MINIMAX_API_KEY` + `MINIMAX_BASE_URL=https://metaso.cn/api/minimax/v2` | 秘塔代理 H3 视频生成(换脸/口播/文生视频主力) | 是 |
-| `MINIMAX_API_KEY_OFFICIAL` | 官方站 sk- key，TTS/声音克隆 | 数字人/自动创作需 |
+| `MINIMAX_VIDEO_VIA` | 视频通道：`metaso`(只用秘塔, 默认)/`official`/`auto`(秘塔优先,官方兜底) | 可选 |
+| `MINIMAX_API_KEY_OFFICIAL` | 官方站 sk- key，仅 TTS/声音克隆（视频不走官方） | 数字人/自动创作需 |
 | `LLM_API_KEY` `LLM_BASE_URL` `LLM_MODEL` | DeepSeek 文案(自动创作; 不可用时自动降级) | 可选 |
 | `WAVESPEED_API_KEY` | 备选推理通道 | 可选 |
+| `PEXELS_API_KEY` | 自动选材素材源(不配则走 Wikimedia Commons 兜底) | 可选 |
 | `ORCH_TOKEN` | 设置后 /api /media 需 token | 部署到公网必设 |
 
 ## 换脸链路怎么跑（已实测）
@@ -94,6 +147,37 @@ cd web && npm install && npm run build && cd ..
 4. 审核页播放验收 → 通过(可填标题/定时) / 打回
 
 实测记录见下方"验收证据"。
+
+## 社媒采集（小红书 / 抖音）
+
+Transform 页 → 「自动选材 · 批量生成」→ ② 社媒对标视频：
+
+- **AI规划检索词**: DeepSeek 把主题展开成小红书/抖音/服装检索词组 + 筛选偏好
+- **搜索**: 走 `services/MediaCrawler`（vendored, `uv run mc_search.py`），无头 Chrome + 持久化登录态，候选合入①的网格（带"红/抖"角标、作者/点赞）
+- **扫码登录**: 首次使用点平台右侧「扫码登录」→ 本机弹 Chrome → App 扫码 → 登录态存 `services/MediaCrawler/browser_data/`（复用数周到数月）
+- **AI初筛前8**: DeepSeek 按标题/作者/点赞给候选排序并自动勾选，理由见悬浮提示
+- 勾选后与 Pexels 候选混选, 「仅入库」进 `assets/sources/` 或「批量生成」直接发矩阵单
+- 端点: `GET /api/materials/social/search|status` `POST /api/materials/social/login` `POST /api/materials/plan` `POST /api/materials/rank`
+- 服务端串行执行（`user_data_dir` 单实例锁），单次搜索 10-60s，慢是正常的
+
+### 每日备料（备料模式, ≈¥0/天）
+
+**内容方向** `data/directions.json`（任务意图唯一事实源, 改它=改全链路）:
+
+```json
+[{"name": "方向名", "active": true, "brief": "主题描述",
+  "daily_quota": {"xhs": 8, "douyin": 8},
+  "rank_rule": "筛选偏好(喂给DeepSeek初筛)",
+  "garment_themes": ["服装方向..."], "transform_prompt": "生成提示词模板"}]
+```
+
+定时任务新增 `material_scout`（如 `0 9 * * *`）或弹窗里点「立即备料」，每方向每日流程：
+DeepSeek 规划检索词 → xhs/抖音按 quota 搜 → 平台 id 跨天去重 → DeepSeek 初筛打分 →
+topK 自动下载入 `assets/sources`(视频)/`assets/garments`(图) → 记入备料池。
+
+弹窗「⓪ 备料池」按方向分组展示（带 AI 理由/评分悬浮提示），点击即勾选，与手动搜索候选混用走同一入库/批量链路。DeepSeek 日耗 ~2k token/方向，唯一花钱的生成环节不做。
+
+注意：MediaCrawler 为学习研究许可（非商用），目前以本地可选连接器方式 vendored，未拷贝进产品代码；下载内容做转换参考时注意肖像权/版权与平台条款。
 
 ## 部署
 

@@ -216,7 +216,7 @@ def n_image_edit(ctx, ins, ps):
 def _h3_run(ctx, content: list[dict], out: Path, ps: dict,
             default_prompt: str, ins: dict) -> dict:
     """H3 通用提交: content 多模态数组 -> 等结果 -> 下载"""
-    from . import minimax
+    from . import minimax, store
     prompt = (ins.get("text") or ins.get("prompt") or "").strip() or default_prompt
     content.insert(0, minimax.Minimax.part_text(prompt))
     mm = minimax.Minimax()
@@ -225,6 +225,8 @@ def _h3_run(ctx, content: list[dict], out: Path, ps: dict,
     ratio = ps.get("画幅") or None
     tid = mm.video_generate(content, duration=duration,
                             resolution=resolution, ratio=ratio)
+    # 立即落库: 后续轮询/下载断连时 job 里仍有服务商 task_id, 可取回
+    store.job_update(ctx.jid, {"provider_task": tid, "provider_via": mm.via})
     ctx.log(f"H3 任务 {tid} ({resolution} {duration}s"
             f"{' ratio=' + ratio if ratio else ''})")
     task = mm.video_wait(tid)
@@ -258,9 +260,10 @@ def n_h3(ctx, ins, ps):
        P("画幅", "combo", "adaptive", options=["adaptive", "9:16", "16:9", "1:1"])])
 def n_h3_faceswap(ctx, ins, ps):
     """对标视频(参考视频) + 人物形象图(参考图) -> 替换人物后的新视频"""
-    from . import minimax
+    from . import media, minimax
+    src = media.h3_ref_video(_p(ctx, ins["video"]), max_secs=15.0)
     content = [
-        minimax.Minimax.part_video(_p(ctx, ins["video"])),
+        minimax.Minimax.part_video(src),
         minimax.Minimax.part_image(_p(ctx, ins["image"])),
     ]
     return _h3_run(ctx, content, ctx.tmp("swap", ".mp4"), ps,

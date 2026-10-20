@@ -1,10 +1,11 @@
 <script setup>
 // 画布自定义节点: 标题(分类色) + 类型化端口 + 参数表单 + 状态染色 + 素材预览
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { Handle, Position } from '@vue-flow/core'
 import { ElMessage } from 'element-plus'
 import { api, assetUrl } from '../api'
 import { store, assetValues, groupUploadKind } from '../store'
+import { useFileDrop } from '../composables/useFileDrop'
 
 const props = defineProps({
   id: String,
@@ -52,20 +53,55 @@ function assetOpts(p) { return assetValues(assetGroup(p)) }
 function isVideoPath(p) { return /\.(mp4|mov|webm|mkv)$/i.test(p || '') }
 function isImgPath(p) { return /\.(png|jpe?g|webp|gif)$/i.test(p || '') }
 
+function acceptFor(p) {
+  const g = assetGroup(p)
+  if (g === 'video') return 'video/*'
+  if (g === 'audio') return 'audio/*'
+  return 'image/*'
+}
+
+async function uploadAsset(p, f) {
+  if (!p || !f) return
+  try {
+    const r = await api.upload(f, groupUploadKind(assetGroup(p)))
+    params.value[p.name] = r.path
+    ElMessage.success('已上传 ' + r.path)
+    store.loaded = false
+  } catch (e) { ElMessage.error('上传失败: ' + e.message) }
+}
+
 function pickUpload(p) {
   const inp = document.createElement('input')
   inp.type = 'file'
-  inp.onchange = async () => {
-    const f = inp.files[0]
-    if (!f) return
-    try {
-      const r = await api.upload(f, groupUploadKind(assetGroup(p)))
-      params.value[p.name] = r.path
-      ElMessage.success('已上传 ' + r.path)
-      store.loaded = false
-    } catch (e) { ElMessage.error('上传失败: ' + e.message) }
+  inp.accept = acceptFor(p)
+  inp.onchange = () => {
+    const f = inp.files?.[0]
+    inp.value = ''
+    uploadAsset(p, f)
   }
   inp.click()
+}
+
+// 拖入素材: 每个素材参数行都是投放区
+const dropName = ref('')
+const dropParam = computed(() =>
+  (def.value.params || []).find(p => p.name === dropName.value))
+const { dragging: dropDragging, dropProps: dropBase } = useFileDrop({
+  accept: () => {
+    const p = dropParam.value
+    return p ? [acceptFor(p)] : []
+  },
+  multiple: false,
+  onFiles: files => uploadAsset(dropParam.value, files?.[0]),
+})
+
+function assetDropProps(p) {
+  return {
+    dragenter: (ev) => { dropName.value = p.name; dropBase.dragenter(ev) },
+    dragover: dropBase.dragover,
+    dragleave: dropBase.dragleave,
+    drop: dropBase.drop,
+  }
 }
 </script>
 
@@ -95,8 +131,10 @@ function pickUpload(p) {
         <div class="nodrag nowheel">
           <label>{{ p.name }}<span v-if="p.hint" class="t"> · {{ p.hint }}</span></label>
 
-          <!-- 素材选择 -->
-          <div v-if="isAsset(p)" style="display:flex;gap:4px">
+          <!-- 素材选择: 可点按钮上传, 也可把文件拖到这一行 -->
+          <div v-if="isAsset(p)" style="display:flex;gap:4px;border-radius:8px;padding:2px"
+               v-on="assetDropProps(p)"
+               :class="{ 'drop-active': dropDragging && dropName === p.name }">
             <el-select v-model="params[p.name]" size="small" filterable clearable
                        :placeholder="'选择素材'" style="flex:1" @change="()=>{}">
               <el-option v-for="v in assetOpts(p)" :key="v" :value="v"

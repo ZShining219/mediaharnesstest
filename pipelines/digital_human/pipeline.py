@@ -99,6 +99,8 @@ def animate_minimax(portrait: Path, audio: Path | None, prompt_text: str,
     else:
         secs = 6
     tid = mm.video_generate(content, duration=secs, resolution="768P")
+    # 立即落库: 后续轮询/下载断连时 job 里仍有服务商 task_id, 可取回
+    store.job_update(jid, {"provider_task": tid, "provider_via": mm.via})
     mm.video_wait_download(tid, C.TMP_DIR / f"{jid}_raw.mp4")
     return C.TMP_DIR / f"{jid}_raw.mp4"
 
@@ -178,7 +180,13 @@ def run(text: str, character: str = "default", emotion: str | None = None,
         store.job_finish(jid, "done", {"item": str(item), "item_id": item.stem})
         return {"job": jid, "item": str(item)}
     except Exception as e:
-        store.job_finish(jid, "error", {"error": str(e)})
+        res = {"error": str(e)}
+        prev = store.job_result(jid)          # 保留已落库的 provider_task
+        if prev.get("provider_task"):
+            res["provider_task"] = prev["provider_task"]
+            res["provider_via"] = prev.get("provider_via")
+        store.job_finish(
+            jid, "unknown" if minimax.is_ambiguous_error(e) else "error", res)
         raise
 
 

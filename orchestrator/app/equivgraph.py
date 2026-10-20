@@ -79,7 +79,9 @@ def digital_human(text: str, character: str, look_path: str | None,
 
 
 def video_transform(source, face=None, prompt: str = "",
-                    title: str | None = None) -> tuple[dict, list]:
+                    title: str | None = None, body=None, cloth=None,
+                    body_back=None, body_side=None,
+                    refs=()) -> tuple[dict, list]:
     tip = prompt or ("把参考视频中的人物替换为参考图片中的人物，"
                      "保持动作、表情、场景和运镜一致")
     g = {"nodes": [
@@ -100,8 +102,13 @@ def video_transform(source, face=None, prompt: str = "",
         {"src": "swap", "src_slot": 0, "dst": "out", "dst_slot": 0},
     ]}
     inputs = [_file("对标视频", "video", source),
-              _file("目标形象图", "image", face),
-              _text("提示词", tip)]
+              _file("目标人脸", "image", face or body),
+              _file("身体参考(正面)", "image", body if face else None),
+              _file("身体参考(背面)", "image", body_back),
+              _file("身体参考(侧面)", "image", body_side),
+              _file("服饰参考", "image", cloth)]
+    inputs += [_file(f"追加参考{i + 1}", "image", r) for i, r in enumerate(refs or [])]
+    inputs.append(_text("提示词", tip))
     return g, [i for i in inputs if i.get("path") or i.get("text")]
 
 

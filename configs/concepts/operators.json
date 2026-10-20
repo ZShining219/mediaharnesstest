@@ -1,0 +1,14 @@
+{
+  "operators": [
+    {"name": "invert", "description": "反转默认假设：不先讲商品好，而先讲旧物/旧做法为什么该退休"},
+    {"name": "ritualize", "description": "把日常动作仪式化：排班、收纳、换季、出门前流程"},
+    {"name": "test", "description": "设计一个可拍的小测试：久坐、抬手、反复穿脱、拉包边、翻底裆"},
+    {"name": "POV", "description": "换视角：抽屉、衣柜、洗衣袋、早晨的视角"},
+    {"name": "social_role", "description": "换关系角色：闺蜜、室友、妈妈、导购、出差同伴"},
+    {"name": "constraint", "description": "加限制：只拍颜色、只拍声音、只拍手、只拍抽屉、只拍一条"},
+    {"name": "compare", "description": "做比较：旧 vs 新、黑 vs 灰 vs 白、波点 vs 纯色"},
+    {"name": "collection", "description": "把商品变成一套系统：一周三条、通勤/居家/旅行胶囊"},
+    {"name": "myth_bust", "description": "拆一个常见误区：纯棉一定厚？无痕一定夹？三色一定难搭？"},
+    {"name": "sensory", "description": "放大触感/声音：捏、拉、翻、抖、落桌、拉链头轻响"}
+  ]
+}

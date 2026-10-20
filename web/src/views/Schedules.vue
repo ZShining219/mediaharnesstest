@@ -25,6 +25,9 @@ const TYPES = [
   { value: 'publish_approved', label: '发布已通过队列', fields: [
     { k: 'platform', label: '平台', type: 'select', opts: ['douyin', 'xhs', 'bilibili'] },
   ]},
+  { value: 'material_scout', label: '每日素材备料(小红书/抖音)', fields: [
+    { k: 'direction', label: '方向名(空=全部active方向)', type: 'text' },
+  ]},
 ]
 
 const curType = () => TYPES.find(t => t.value === form.value.type)
@@ -53,7 +56,7 @@ async function del(j) {
   load()
 }
 
-const TYPE_LABEL = { digital_human: '数字人', video_transform: '视频转换', auto_content: '自动创作', publish_approved: '发布队列' }
+const TYPE_LABEL = { digital_human: '数字人', video_transform: '视频转换', auto_content: '自动创作', publish_approved: '发布队列', material_scout: '素材备料' }
 
 onMounted(async () => { await refreshMeta().catch(() => {}); load() })
 </script>

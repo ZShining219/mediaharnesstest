@@ -66,3 +66,10 @@
 | HeyGen 照片数字人 | 形象照 + MiniMax 克隆声音 + InfiniteTalk 口播 |
 | 闪剪 AI 文案+批量 | MPT 创作管线 + cron 定时批量 |
 | 剪映级字幕/BGM | ffmpeg 后处理节点（字幕/响度/BGM） |
+
+## 五、Clipcat（2026-10-18 补充）
+
+- 纯产品对标：[clipcat-product-reference.md](clipcat-product-reference.md)  
+  只写 Clipcat：定位、逐屏呈现、设计系统、工作区 IA、功能模块、模型/算力体系、公开 API、增长机制。
+- 链路设计与迁移参考：[pure-commerce-video-design.md](pure-commerce-video-design.md)  
+  对比现有「对标视频转换」与新增「纯带货视频生成」，含 VideoPlan、Agent 分析/提示词反推、UI/API/代码映射、迁移清单与 MVP 路线。

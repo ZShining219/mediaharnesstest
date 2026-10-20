@@ -1,0 +1,77 @@
+{
+  "product_id": "panty-cotton-lace",
+  "reference_id": "ref-1792419233-2ae1",
+  "image": "assets/products/panty-cotton-lace.jpg",
+  "back_image": "assets/products/panty-cotton-lace-back.jpg",
+  "inner_image": "assets/products/panty-cotton-lace-inner.jpg",
+  "category": "内裤",
+  "identity": "都市丽人无痕纯棉三角内裤，黑/灰/白多色组合，蕾丝腰头与蝴蝶结",
+  "description": "无痕纯棉三角内裤，波点/纯色面料，蕾丝花边腰头，前中蝴蝶结，加长底裆，多色组合装。",
+  "must_show": [
+    "黑/灰/白多色组合",
+    "蕾丝腰头与蝴蝶结",
+    "波点/纯色纯棉面料",
+    "加长纯棉底裆",
+    "无痕包边与三角版型"
+  ],
+  "must_not_change": [
+    "多色组合（黑/灰/白）",
+    "蕾丝腰头结构",
+    "前中蝴蝶结",
+    "波点/纯色面料纹理",
+    "加长底裆",
+    "三角版型与无痕包边"
+  ],
+  "claims": [
+    "10A抗菌面料",
+    "纯棉亲肤",
+    "无痕包边不夹臀",
+    "加长底裆更安心"
+  ],
+  "proofs": [
+    "手部撑开腰头展示弹力",
+    "翻开底裆展示加长裆",
+    "多色摊开展示颜色",
+    "拉伸裤腿展示无痕包边",
+    "真人侧身展示腰头与包边贴合",
+    "真人背身展示后腰不卷边"
+  ],
+  "default_archetype": "ugc_individual_seller",
+  "color_policy": "same_style_multi",
+  "offer": "活动价，点下方看",
+  "reference_policy": "该参考图只负责商品本身；忽略图中的手、背景、文字；不要把商品图里的手/背景带进画面。",
+  "allowed_person_visibility": [
+    "full",
+    "partial",
+    "hands_only",
+    "none"
+  ],
+  "person": {
+    "image": "assets/persons/半身照.png",
+    "side_image": "assets/persons/侧脸.png",
+    "identity": "短发亚洲女性，脸型、发型、体型、肤色与参考图1一致",
+    "immutable": [
+      "脸型",
+      "短发发型",
+      "体型",
+      "肤色"
+    ],
+    "policy": "只保留人物身份；服装、场景和镜头按本次风格执行；不换脸、不改变发型/体型。",
+    "authorization": "self_owned_test"
+  },
+  "constraints": {
+    "platform": "douyin",
+    "language": "zh",
+    "claims_avoid": [
+      "治疗/预防妇科疾病",
+      "医疗级抑菌",
+      "绝对无菌",
+      "丰臀/塑形"
+    ],
+    "compliance_notes": [
+      "人物出镜需具备肖像授权",
+      "抗菌表述需真实资质支撑",
+      "不使用绝对化用语"
+    ]
+  }
+}

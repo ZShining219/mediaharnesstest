@@ -3,7 +3,7 @@
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRouter } from 'vue-router'
-import { api, mediaUrl, fmtTime } from '../api'
+import { api, mediaUrl, fmtTime, pipelineName } from '../api'
 import InputList from '../components/InputList.vue'
 
 const router = useRouter()
@@ -108,7 +108,8 @@ onMounted(load)
           <div style="flex:1;min-width:240px">
             <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
               <b>{{ it.title || it.id }}</b>
-              <el-tag size="small" effect="plain">{{ it.pipeline || 'graph' }}</el-tag>
+              <el-tag size="small" effect="plain">{{ pipelineName(it.pipeline) }}</el-tag>
+              <el-tag v-if="it.lane" size="small" type="warning" effect="plain">{{ it.lane }}</el-tag>
               <span class="dim" style="font-size:12px">{{ fmtTime(it.created_at) }}</span>
             </div>
             <div v-if="it.desc" class="dim" style="font-size:12.5px;margin-top:6px">{{ it.desc }}</div>

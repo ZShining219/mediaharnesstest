@@ -24,6 +24,11 @@ def run_job(jtype: str, params: dict):
     log.info("scheduled job start: %s %s", jtype, params)
     jid = store.job_create(f"cron:{jtype}", params)
     try:
+        if jtype == "material_scout":
+            from . import materials
+            store.job_finish(jid, "done",
+                             materials.scout(params.get("direction")))
+            return
         if jtype == "digital_human":
             text = params.get("text")
             if not text and params.get("text_file"):

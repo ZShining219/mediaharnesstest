@@ -14,6 +14,8 @@ let timer = null
 
 const NST_COLOR = { running: 'warning', ok: 'success', error: 'danger', skipped: 'info' }
 const NST_LABEL = { running: '运行中', ok: '完成', error: '失败', skipped: '跳过' }
+const SHOT_LABEL = { pending: '待生成', running: '生成中', done: '完成', failed: '失败' }
+const SHOT_TAG = { pending: 'info', running: 'warning', done: 'success', failed: 'danger' }
 
 async function load() {
   try { jobs.value = await api.get('/api/jobs') } catch {}
@@ -30,11 +32,16 @@ async function open(j) {
 
 function res(j) { return j.result || {} }
 function inputs(j) { return (j.params || {}).inputs || res(j).inputs || [] }
+function shotList(j) { return res(j).shots || [] }
+function shotDone(j) { return shotList(j).filter(s => s.status === 'done').length }
+function planId(j) { return (j.params || {}).plan_id || '' }
 function hasGraph(j) { return !!(j.params || {}).graph }
 function nodeList(j) { return Object.entries(res(j).node_status || {}) }
 function logs(j) { return res(j).logs || [] }
 function items(j) { return res(j).items || (res(j).item_id ? [res(j).item_id] : []) }
-function errMsg(j) { return res(j).error || (res(j).errors || [])[0] || '' }
+function errMsg(j) {
+  return res(j).error || res(j).recover_error || (res(j).errors || [])[0] || ''
+}
 
 onMounted(() => { load(); timer = setInterval(load, 4000) })
 onUnmounted(() => clearInterval(timer))
@@ -59,6 +66,13 @@ onUnmounted(() => clearInterval(timer))
             </el-tag>
           </template>
         </el-table-column>
+        <el-table-column label="分镜" width="100">
+          <template #default="{ row }">
+            <span v-if="row.type === 'product_video' && shotList(row).length" class="dim">
+              {{ shotDone(row) }}/{{ shotList(row).length }} 镜
+            </span>
+          </template>
+        </el-table-column>
         <el-table-column label="结果/错误" min-width="200">
           <template #default="{ row }">
             <span v-if="errMsg(row)" class="dim" style="color:#f87171">{{ errMsg(row).slice(0, 60) }}</span>
@@ -80,12 +94,43 @@ onUnmounted(() => clearInterval(timer))
           </el-tag>
           <span class="dim" style="margin-left:10px;font-size:12.5px">{{ jobTypeName(detail.type) }}</span>
           <span class="dim" style="margin-left:10px;font-size:12.5px">{{ fmtTime(detail.created_at) }}</span>
+          <span v-if="res(detail).phase" class="dim" style="margin-left:10px;font-size:12.5px">
+            · {{ res(detail).phase }}
+          </span>
         </div>
 
         <el-button v-if="hasGraph(detail)" size="small" type="primary" plain
                    @click="router.push({ name: 'canvas', query: { job: detail.id } })">
           查看对应图（只读回放）
         </el-button>
+        <el-button v-if="planId(detail)" size="small" type="primary" plain
+                   @click="router.push({ name: 'product-video', query: { plan: planId(detail) } })">
+          打开带货视频方案
+        </el-button>
+        <el-button v-if="['fission_run', 'fission_p0'].includes(detail.type) && res(detail).run_dir"
+                   size="small" type="primary" plain
+                   @click="router.push({ name: 'fission', query: {
+                     run: String(res(detail).run_dir).split('/').filter(Boolean).pop() } })">
+          打开裂变结果
+        </el-button>
+
+        <template v-if="res(detail).provider_task">
+          <h4 style="margin:14px 0 8px">服务商任务 ID</h4>
+          <div class="mono dim" style="font-size:12px;user-select:all">
+            {{ res(detail).provider_task }}
+            <span v-if="res(detail).provider_via"> · {{ res(detail).provider_via }}</span>
+          </div>
+        </template>
+
+        <template v-if="shotList(detail).length">
+          <h4 style="margin:14px 0 8px">分镜进度</h4>
+          <div class="tag-list">
+            <el-tag v-for="s in shotList(detail)" :key="s.index"
+                    :type="SHOT_TAG[s.status] || 'info'" size="small" effect="plain">
+              分镜{{ s.index }}: {{ SHOT_LABEL[s.status] || s.status }}
+            </el-tag>
+          </div>
+        </template>
 
         <template v-if="inputs(detail).length">
           <h4 style="margin:14px 0 8px">输入素材</h4>

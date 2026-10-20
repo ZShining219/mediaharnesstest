@@ -3,7 +3,10 @@ import { reactive } from 'vue'
 import { api } from './api'
 
 export const store = reactive({
-  assets: { source: [], garment: [], voice: [], image: [], bgm: [], characters: [] },
+  assets: {
+    source: [], garment: [], voice: [], image: [],
+    person: [], product: [], background: [], bgm: [], characters: [],
+  },
   characters: [],
   nodeSchema: [],
   loaded: false,
@@ -23,10 +26,14 @@ export async function refreshMeta(force = false) {
 // asset:<group> 参数对应的素材分组
 export const ASSET_GROUPS = {
   video: ['source'], image: ['image', 'garment'], audio: ['voice', 'bgm'],
+  person: ['person'], product: ['product'], background: ['background'],
 }
 export function assetValues(group) {
   return (ASSET_GROUPS[group] || []).flatMap(k => store.assets[k] || [])
 }
 export function groupUploadKind(group) {
-  return { video: 'source', image: 'image', audio: 'voice' }[group] || 'image'
+  return {
+    video: 'source', image: 'image', audio: 'voice',
+    person: 'person', product: 'product', background: 'background',
+  }[group] || 'image'
 }

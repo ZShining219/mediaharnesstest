@@ -93,6 +93,8 @@ def run_minimax_llm(subject: str, script: str, jid: str, cfg: dict) -> Path:
     tid = mm.video_generate([mm.part_text(visual_prompt)],
                             duration=secs, resolution="768P",
                             ratio=cfg.get("video_aspect", "9:16"))
+    # 立即落库: 后续轮询/下载断连时 job 里仍有服务商 task_id, 可取回
+    store.job_update(jid, {"provider_task": tid, "provider_via": mm.via})
     mm.video_wait_download(tid, video)
 
     out = C.TMP_DIR / f"{jid}_final.mp4"
@@ -130,7 +132,14 @@ def run(subject: str, script: str = "", title: str | None = None,
         store.job_finish(jid, "done", {"item": str(item), "item_id": item.stem})
         return {"job": jid, "item": str(item)}
     except Exception as e:
-        store.job_finish(jid, "error", {"error": str(e)})
+        from orchestrator.app import minimax
+        res = {"error": str(e)}
+        prev = store.job_result(jid)          # 保留已落库的 provider_task
+        if prev.get("provider_task"):
+            res["provider_task"] = prev["provider_task"]
+            res["provider_via"] = prev.get("provider_via")
+        store.job_finish(
+            jid, "unknown" if minimax.is_ambiguous_error(e) else "error", res)
         raise
 
 

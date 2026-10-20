@@ -102,6 +102,23 @@ html.dark {
 .feat-card .cta { color: #a5b4fc; font-size: 13px; font-weight: 600; }
 .feat-card .cost { position: absolute; top: 16px; right: 16px; font-size: 11px; color: #5f6780; }
 
+/* ---- 拖拽上传 ---- */
+.drop-active {
+  border-color: rgba(34, 211, 238, .85) !important;
+  background: rgba(34, 211, 238, .08) !important;
+  box-shadow: 0 0 0 2px rgba(34, 211, 238, .22) inset;
+}
+.drop-overlay {
+  position: fixed; inset: 0; z-index: 3000; pointer-events: none;
+  display: grid; place-items: center;
+  background: rgba(5, 7, 11, .55); backdrop-filter: blur(3px);
+}
+.drop-overlay > div {
+  padding: 22px 34px; border-radius: 16px; font-size: 15px; font-weight: 600;
+  color: #e8fbff; border: 1.5px dashed rgba(34, 211, 238, .8);
+  background: rgba(13, 17, 25, .92); box-shadow: 0 16px 50px rgba(0, 0, 0, .5);
+}
+
 /* ---- 媒体 ---- */
 .media-video { width: 100%; max-height: 420px; border-radius: 10px; background: #000; }
 .media-thumb { width: 100%; aspect-ratio: 16/10; object-fit: cover; border-radius: 10px; background: #000; display: block; }

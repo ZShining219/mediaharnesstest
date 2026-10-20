@@ -15,3 +15,4 @@ rank-bm25>=0.2
 faster-whisper>=1.2
 scenedetect>=0.7
 numpy>=2.0
+pillow>=10

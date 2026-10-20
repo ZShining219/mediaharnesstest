@@ -1,0 +1,72 @@
+{
+  "product_id": "bra-milk-lace",
+  "reference_id": "ref-1792419234-1471",
+  "image": "assets/products/bra-milk-lace.jpg",
+  "back_image": "assets/products/bra-milk-lace-back.jpg",
+  "inner_image": "assets/products/bra-milk-lace-inner.jpg",
+  "category": "文胸",
+  "identity": "米白色/奶白色蕾丝无钢圈调整型文胸",
+  "description": "米白色蕾丝无钢圈调整型文胸，金色包边，前中蝴蝶结，宽肩带，四排扣背扣，内里软支撑。",
+  "must_show": [
+    "正面罩杯与花卉蕾丝纹理",
+    "金色/香槟金包边",
+    "前中桃色蝴蝶结",
+    "宽肩带与侧比连接处",
+    "背面四排扣",
+    "内里点状纹理软支撑"
+  ],
+  "must_not_change": [
+    "奶白/米白色",
+    "花卉蕾丝花型与密度",
+    "金色/香槟金包边",
+    "前中桃色蝴蝶结位置",
+    "四排扣数量与位置",
+    "宽肩带结构",
+    "无钢圈软支撑结构"
+  ],
+  "claims": [
+    "小胸也能穿出自然聚拢",
+    "无钢圈不勒，宽肩带稳住",
+    "背面四排扣+内里软支撑",
+    "奶白蕾丝百搭，通勤居家都能穿"
+  ],
+  "proofs": [
+    "真人手持文胸正面展示",
+    "按压罩杯回弹、捏肩带",
+    "翻背面点四排扣",
+    "真人外搭衬衫展示肩带/领口"
+  ],
+  "default_archetype": "ugc_individual_seller",
+  "color_policy": "single",
+  "offer": "活动价，点下方看",
+  "reference_policy": "参考图2只负责商品本身；忽略图中的手、背景、文字；不要把商品图里的手/背景带进画面。",
+  "person": {
+    "image": "assets/persons/半身照.png",
+    "side_image": "assets/persons/侧脸.png",
+    "identity": "短发亚洲女性，脸型、发型、体型、肤色与参考图1一致",
+    "immutable": [
+      "脸型",
+      "短发发型",
+      "体型",
+      "肤色"
+    ],
+    "policy": "不要换脸、不要改变发型/体型；换成米色针织开衫或白衬衫，居家客厅/卧室。",
+    "authorization": "self_owned_test"
+  },
+  "constraints": {
+    "platform": "douyin",
+    "language": "zh",
+    "claims_avoid": [
+      "治疗/矫正乳房疾病",
+      "丰胸/增大",
+      "永久塑形",
+      "医疗级支撑",
+      "无依据的绝对化表述"
+    ],
+    "compliance_notes": [
+      "内衣类内容注意画面尺度，避免过度暴露与性暗示",
+      "不使用绝对化用语与未证实功效",
+      "人物出镜需具备肖像授权"
+    ]
+  }
+}

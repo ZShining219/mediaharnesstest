@@ -32,12 +32,46 @@ def job_create(jtype: str, params: dict) -> str:
     return jid
 
 
-def job_finish(jid: str, status: str, result: dict):
+def job_finish(jid: str, status: str, result: dict, *, force: bool = False) -> bool:
+    """写终态, 默认只允许 running -> 终态。
+
+    管线自己已经把结果写成 unknown/error/done(含 provider_task 等找回线索)后
+    会 re-raise, 上层兜底若再次 job_finish 会把这些线索覆盖掉 —— 因此这里默认
+    拒绝二次终态写入, 返回是否真正写入。需要强制覆盖时传 force=True。
+    """
     with _conn() as c:
-        c.execute(
-            "UPDATE jobs SET status=?, result=?, updated_at=? WHERE id=?",
-            (status, json.dumps(result, ensure_ascii=False), time.time(), jid),
-        )
+        row = c.execute("SELECT result FROM jobs WHERE id=?", (jid,)).fetchone()
+        if not row:
+            return False
+        # 与已有结果合并: 运行中写入的 provider_task / provider_via 等
+        # 找回线索不能因为最终态回写而丢失
+        merged = {**json.loads(row[0] or "{}"), **(result or {})}
+        if status == "done":          # 成功终态不保留上一轮失败/取回痕迹
+            for k in ("error", "recover_error", "recovering"):
+                merged.pop(k, None)
+        sql = "UPDATE jobs SET status=?, result=?, updated_at=? WHERE id=?"
+        args = [status, json.dumps(merged, ensure_ascii=False), time.time(), jid]
+        if not force:
+            sql += " AND status='running'"
+        return c.execute(sql, args).rowcount > 0
+
+
+def job_get(jid: str) -> dict | None:
+    with _conn() as c:
+        row = c.execute(
+            "SELECT id,type,status,params,result,created_at,updated_at "
+            "FROM jobs WHERE id=?", (jid,),
+        ).fetchone()
+    if not row:
+        return None
+    return dict(id=row[0], type=row[1], status=row[2],
+                params=json.loads(row[3] or "{}"),
+                result=json.loads(row[4] or "{}"),
+                created_at=row[5], updated_at=row[6])
+
+
+def job_result(jid: str) -> dict:
+    return (job_get(jid) or {}).get("result") or {}
 
 
 def job_update(jid: str, result: dict | None = None, status: str | None = None):

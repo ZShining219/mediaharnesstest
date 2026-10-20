@@ -3,7 +3,8 @@ import { ref, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { api } from './api'
 import {
-  Monitor, Share, DocumentChecked, Finished, FolderOpened, Timer, Odometer, VideoPlay,
+  Monitor, Share, DocumentChecked, Finished, FolderOpened, Timer, Odometer, VideoPlay, Switch, Film,
+  Collection, VideoCamera, MagicStick,
 } from '@element-plus/icons-vue'
 
 const route = useRoute()
@@ -13,9 +14,14 @@ let timer = null
 
 const menus = [
   { name: 'studio', label: '工作台', icon: Monitor },
+  { name: 'transform', label: '视频转换', icon: Switch },
+  { name: 'reference-pool', label: '参考视频池', icon: VideoCamera },
+  { name: 'fission', label: '裂变素材', icon: MagicStick },
+  { name: 'product-video', label: '带货视频', icon: Film },
   { name: 'canvas', label: '节点画布', icon: Share },
   { name: 'jobs', label: '任务中心', icon: DocumentChecked },
   { name: 'review', label: '审核队列', icon: Finished, badge: () => reviewCount.value },
+  { name: 'gallery', label: '成果展示', icon: Collection },
   { name: 'assets', label: '素材库', icon: FolderOpened },
   { name: 'schedules', label: '定时发布', icon: Timer },
   { name: 'status', label: '系统状态', icon: Odometer },

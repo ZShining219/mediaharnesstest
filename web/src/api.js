@@ -27,6 +27,7 @@ async function req(path, method = 'GET', body, isForm = false) {
 export const api = {
   get: (p) => req(p),
   post: (p, b) => req(p, 'POST', b || {}),
+  put: (p, b) => req(p, 'PUT', b || {}),
   del: (p) => req(p, 'DELETE'),
   upload: (file, kind, extra = '') => {
     const fd = new FormData()
@@ -43,15 +44,30 @@ export const fmtTime = (ts) => ts ? new Date(ts * 1000).toLocaleString('zh-CN', 
 
 export const JOB_TYPES = {
   digital_human: '数字人口播', video_transform: '视频转换', auto_content: '自动创作',
+  product_video: '带货视频', douyin_acquire: '抖音素材获取',
+  reference_fission: '素材裂变', fission_run: '裂变链路',
+  fission_p0: '创意裂变 P0.2', fission_slice: '裂变切片',
   graph: '节点画布', 'cron:digital_human': '定时·数字人', 'cron:video_transform': '定时·视频转换',
   'cron:auto_content': '定时·自动创作', 'cron:publish_approved': '定时·发布',
 }
 export const jobTypeName = (t) => JOB_TYPES[t] || t
 
+// 审核/产出记录的管线名 (pipeline 字段)
+export const PIPELINE_LABEL = {
+  digital_human: '数字人口播', video_transform: '视频转换',
+  auto_content: '自动创作', graph: '节点画布', product_video: '带货视频',
+  fission_run: '裂变链路', fission_p0: '创意裂变 P0.2',
+  fission_slice: '裂变切片',
+}
+export const pipelineName = (p) => PIPELINE_LABEL[p] || p || '节点画布'
+
 export const STATUS_TAG = {
   running: { type: 'warning', label: '运行中' },
   done: { type: 'success', label: '完成' },
+  partial: { type: 'warning', label: '部分完成' },
+  contracts_done: { type: 'warning', label: '契约完成' },
   error: { type: 'danger', label: '失败' },
+  unknown: { type: 'warning', label: '待核对' },
   interrupted: { type: 'info', label: '已中断' },
   queued: { type: 'info', label: '排队中' },
 }

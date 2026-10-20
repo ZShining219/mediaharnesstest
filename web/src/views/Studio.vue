@@ -13,8 +13,6 @@ const submitting = ref(false)
 
 // --- 数字人 ---
 const dh = ref({ character: '', emotion: 'neutral', text: '', title: '', tags: '' })
-// --- 视频转换 ---
-const vt = ref({ source: '', face: '', prompt: '', resolution: '768P', title: '' })
 // --- 自动创作 ---
 const ac = ref({ subject: '', script: '', title: '' })
 
@@ -23,7 +21,6 @@ const emotions = ['neutral', 'happy', 'sad', 'angry', 'surprise', 'fear', 'disgu
 // 每张卡背后对应一条节点链(与节点画布的等效执行图一致)
 const CARD_STEPS = {
   dh: ['口播文案', 'MiniMax TTS 配音', 'H3 形象口播(图+声音→视频)', '合成音轨 · 烧字幕', '审核队列'],
-  vt: ['对标视频 + 形象图', 'H3 人物替换', '回填原视频音轨', '审核队列'],
   ac: ['主题', 'DeepSeek 口播文案', 'MiniMax TTS 配音', 'DeepSeek 画面提示词', 'H3 文生视频', '合成音轨', '审核队列'],
 }
 
@@ -39,13 +36,6 @@ async function submit(kind) {
         emotion: dh.value.emotion || null, title: dh.value.title || null,
         tags: dh.value.tags.split(/[,，]/).filter(Boolean),
       })
-    } else if (kind === 'vt') {
-      if (!vt.value.source || !vt.value.face) { ElMessage.warning('需要对标视频和形象图'); return }
-      r = await api.post('/api/jobs/video-transform', {
-        source: vt.value.source, face: vt.value.face,
-        prompt: vt.value.prompt, resolution: vt.value.resolution,
-        title: vt.value.title || null,
-      })
     } else {
       if (!ac.value.subject.trim()) { ElMessage.warning('请填主题'); return }
       r = await api.post('/api/jobs/auto-content', {
@@ -59,27 +49,6 @@ async function submit(kind) {
   } catch (e) {
     ElMessage.error('提交失败: ' + e.message)
   } finally { submitting.value = false }
-}
-
-async function uploadInline(kind, ev) {
-  const f = ev.target.files?.[0]
-  if (!f) return
-  try {
-    const r = await api.upload(f, kind)
-    ElMessage.success('已上传 ' + r.path)
-    store.loaded = false
-    await refreshMeta(true)
-    return r.path
-  } catch (e) { ElMessage.error(e.message) }
-}
-
-async function vtPickVideo(e) {
-  const p = await uploadInline('source', e)
-  if (p) vt.value.source = p
-}
-async function vtPickImage(e) {
-  const p = await uploadInline('image', e)
-  if (p) vt.value.face = p
 }
 
 async function loadDash() { try { dash.value = await api.get('/api/dashboard') } catch {} }
@@ -113,12 +82,12 @@ onMounted(async () => {
         <span class="cost">≈ ¥0.5/条 · MiniMax TTS + H3</span>
         <span class="cta">开始制作 →</span>
       </div>
-      <div class="feat-card" @click="dlg = 'vt'">
+      <div class="feat-card" @click="router.push('/transform')">
         <div class="fico">🔄</div>
         <h3>对标视频转换</h3>
         <p>传对标视频 + 目标形象图，把视频里的人物替换成你的形象(换脸/换人)，动作场景保留。</p>
         <span class="cost">≈ ¥1/条 · MiniMax H3</span>
-        <span class="cta">开始转换 →</span>
+        <span class="cta">进入功能页 →</span>
       </div>
       <div class="feat-card" @click="dlg = 'ac'">
         <div class="fico">⚡</div>
@@ -188,58 +157,6 @@ onMounted(async () => {
       <template #footer>
         <el-button @click="dlg=''">取消</el-button>
         <el-button type="primary" :loading="submitting" @click="submit('dh')">生成口播视频</el-button>
-      </template>
-    </el-dialog>
-
-    <!-- ===== 视频转换弹窗 ===== -->
-    <el-dialog :model-value="dlg==='vt'" title="对标视频转换（换脸/人物替换）" width="520px" @close="dlg=''">
-      <el-form label-position="top">
-        <el-form-item label="对标视频（要替换人物的原视频）">
-          <div style="display:flex;gap:8px;width:100%">
-            <el-select v-model="vt.source" style="flex:1" filterable placeholder="从素材库选">
-              <el-option v-for="p in store.assets.source" :key="p" :value="p" :label="p.split('/').pop()" />
-            </el-select>
-            <el-button @click="$refs.vtFile.click()">上传</el-button>
-            <input ref="vtFile" type="file" accept="video/*" hidden @change="vtPickVideo">
-          </div>
-          <video v-if="vt.source" :src="`/api/assets/file?path=${encodeURIComponent(vt.source)}`"
-                 class="media-video" style="max-height:180px;margin-top:6px" muted controls />
-        </el-form-item>
-        <el-form-item label="目标形象图（换成这个人）">
-          <div style="display:flex;gap:8px;width:100%">
-            <el-select v-model="vt.face" style="flex:1" filterable placeholder="选人像参考图">
-              <el-option v-for="p in [...store.assets.image, ...store.assets.garment]"
-                         :key="p" :value="p" :label="p.split('/').pop()" />
-            </el-select>
-            <el-button @click="$refs.vtImg.click()">上传</el-button>
-            <input ref="vtImg" type="file" accept="image/*" hidden @change="vtPickImage">
-          </div>
-          <img v-if="vt.face" :src="`/api/assets/file?path=${encodeURIComponent(vt.face)}`"
-               style="max-height:140px;border-radius:8px;margin-top:6px" />
-        </el-form-item>
-        <el-form-item label="提示词（可空，默认按参考图替换人物）">
-          <el-input v-model="vt.prompt" type="textarea" :rows="2"
-                    placeholder="如：把人物换成参考图中的女性，保持讲话动作和场景" />
-        </el-form-item>
-        <el-form-item label="清晰度">
-          <el-radio-group v-model="vt.resolution">
-            <el-radio-button value="768P">768P 标准</el-radio-button>
-            <el-radio-button value="480p">480p 省钱</el-radio-button>
-            <el-radio-button value="2K">2K 高清</el-radio-button>
-          </el-radio-group>
-        </el-form-item>
-      </el-form>
-      <div class="steps-sum">
-        <div class="cap">本次将执行</div>
-        <div class="step-line">
-          <template v-for="(s, i) in CARD_STEPS.vt" :key="s">
-            <span v-if="i" class="ar">→</span><span class="st">{{ s }}</span>
-          </template>
-        </div>
-      </div>
-      <template #footer>
-        <el-button @click="dlg=''">取消</el-button>
-        <el-button type="primary" :loading="submitting" @click="submit('vt')">开始转换</el-button>
       </template>
     </el-dialog>
 

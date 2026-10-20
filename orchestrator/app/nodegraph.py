@@ -115,6 +115,7 @@ def run(graph: dict, jid: str):
     status: dict[str, str] = {}
     logs: list[str] = []
     errors: list[str] = []
+    first_exc: Exception | None = None
 
     def mark(nid, s):
         status[nid] = s
@@ -152,6 +153,8 @@ def run(graph: dict, jid: str):
             results[nid] = d.fn(ctx, ins, n.get("params") or {}) or {}
             mark(nid, "ok")
         except Exception as e:
+            if first_exc is None:
+                first_exc = e
             errors.append(f"{d.title}: {e}")
             ctx.log(f"❌ {d.title}: {e}")
             mark(nid, "error")
@@ -160,5 +163,5 @@ def run(graph: dict, jid: str):
         "node_status": status, "logs": logs[-50:], "items": ctx.items,
         "error": "; ".join(errors) if errors else None})
     if errors and not ctx.items:
-        raise GraphError("; ".join(errors)[:500])
+        raise GraphError("; ".join(errors)[:500]) from first_exc
     return {"items": ctx.items, "node_status": status, "errors": errors}

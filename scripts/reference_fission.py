@@ -25,7 +25,7 @@ def main():
                     help="用于提取商品图的参考视频 ID")
     ap.add_argument("--time", type=float, default=8.0,
                     help="提取商品图的秒数")
-    ap.add_argument("--person", default="assets/persons/1792312878_1.png")
+    ap.add_argument("--person", default="assets/persons/半身照.png")
     ap.add_argument("--n", type=int, default=5)
     ap.add_argument("--bgm", default=None)
     ap.add_argument("--dry-run", action="store_true",
